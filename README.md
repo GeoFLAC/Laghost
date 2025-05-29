@@ -290,8 +290,7 @@ the following versions of Laghost have been developed
 
 ## Contact
 
-You can reach the Laghost team by emailing slee29@memphis.edu or sungho91123@gmail.com or by leaving a
-comment in the [issue tracker](https://github.com/GeoFLAC/Laghost/issues).
+Leave a comment or ask a question in the [issue tracker](https://github.com/GeoFLAC/Laghost/issues).
 
 ## Copyright
 
