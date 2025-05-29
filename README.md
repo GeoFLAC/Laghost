@@ -143,6 +143,7 @@ Other computational motives in Laghost include the following:
 
 Laghost has the following external dependencies:
 
+-  Working MPI compiler
 -  hypre, used for parallel linear algebra<br>
    https://github.com/hypre-space/hypre
 -  METIS, used for parallel domain decomposition<br>
