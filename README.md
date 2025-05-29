@@ -144,7 +144,7 @@ Other computational motives in Laghost include the following:
 
 ## Building
 
-Laghos has the following external dependencies:
+Laghost has the following external dependencies:
 
 - *hypre*, used for parallel linear algebra, we recommend version 2.11.2<br>
    https://computation.llnl.gov/casc/hypre/software.html
