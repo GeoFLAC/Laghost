@@ -172,10 +172,15 @@ or
 
 ### hypre and METIS 
 
-Put them on the same level as the `Laghost` directory: e.g.,
+The MFEM library has a serial and an MPI-based parallel version, which largely
+share the same code base. The only prerequisite for building the serial version
+of MFEM is a (modern) C++ compiler, such as g++. The parallel version of MFEM
+requires an MPI C++ compiler, hypre and METIS.
+
+Once built, hypre and METIS are expected to be on the same level as the `Laghost` directory: e.g.,
 ```sh
 ~> ls
-Laghost/  hypre-2.11.2.tar.gz  metis-4.0.3.tar.gz
+Laghost/  hypre  metis-5.1.0
 ```
 
 #### Build hypre: e.g.,
@@ -187,42 +192,24 @@ cd hypre/src
 make -j
 ```
 
-or
-
-```sh
-~> tar -zxvf hypre-2.11.2.tar.gz
-~> cd hypre-2.11.2/src/
-~/hypre-2.11.2/src> ./configure --disable-fortran
-~/hypre-2.11.2/src> make -j
-~/hypre-2.11.2/src> cd ../..
-```
-For large runs (problem size above 2 billion unknowns), add the
-`--enable-bigint` option to the above `configure` line.
-
 #### Build METIS:
 
-```sh
-git clone https://github.com/KarypisLab/GKlib
-cd GKlib
-make config prefix=./
-make install
-cd ..
-git clone https://github.com/KarypisLab/METIS
-cd METIS
-make config cc=mpicc gklib_path=../GKlib/build/Linux-x86_64 prefix=./
-make install
-```
+- METIS (a family of multilevel partitioning algorithms)
+  https://github.com/mfem/tpls
 
-This build is optional, as MFEM can be build without METIS by specifying
-`MFEM_USE_METIS = NO` below.
+  Note: We recommend our mirror of metis-4.0.3/5.1.0 above because the METIS
+  webpage, http://glaros.dtc.umn.edu/gkhome/metis/metis/overview, is often down
+  and we don't support yet the new repo https://github.com/KarypisLab/METIS.
 
-<!--```sh
-~> tar -zxvf metis-4.0.3.tar.gz
-~> cd metis-4.0.3
-~/metis-4.0.3> make
-~/metis-4.0.3> cd ..
-~> ln -s metis-4.0.3 metis-4.0
-```-->
+- Follow https://mfem.org/building/#parallel-build-using-metis-5
+  ```sh
+  ~> tar zvxf metis-5.1.0.tar.gz
+  ~> cd metis-5.1.0
+  ~/metis-5.1.0> make BUILDDIR=lib config
+  ~/metis-5.1.0> make BUILDDIR=lib
+  ~/metis-5.1.0> cp lib/libmetis/libmetis.a lib
+  ```
+- This build is optional but recommended.
 
 ### Build GSLIB:
 
@@ -254,7 +241,7 @@ Clone and build the parallel version of MFEM:
 ~> cd mfem/
 ~/mfem> git checkout master
 ~/mfem> cp ../Laghost/mfem_modification/vector* ./linalg/
-~/mfem> make parallel -j MFEM_USE_GSLIB=YES
+~/mfem> make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../metis-5.1.0
 ~/mfem> cd ..
 ```
 
@@ -264,24 +251,12 @@ Clone and build the cuda version of MFEM:
 ~> cd mfem/
 ~/mfem> git checkout master
 ~/mfem> cp ../Laghost/mfem_modification/vector* ./linalg/
-~/mfem> make pcuda -j MFEM_USE_GSLIB=YES
+~/mfem> make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../metis-5.1.0
 ~/mfem> cd ..
 ```
 
 The above uses the `master` branch of MFEM.
 See the [MFEM building page](http://mfem.org/building/) for additional details.
-
-<!-- (Optional) Clone and build GLVis:
-```sh
-~> git clone https://github.com/GLVis/glvis.git ./glvis
-~> cd glvis/
-~/glvis> make
-~/glvis> cd ..
-```
-The easiest way to visualize Laghost results is to have GLVis running in a
-separate terminal. Then the `-vis` option in Laghos will stream results directly
-to the GLVis socket.
- -->
  
 ### Build Laghost
 
