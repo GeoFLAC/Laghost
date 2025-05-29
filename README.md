@@ -226,12 +226,24 @@ This build is optional, as MFEM can be build without METIS by specifying
 
 ### Build GSLIB:
 
+  GSLIB (optional), used when MFEM_USE_GSLIB = YES. The gslib library must be
+  built prior to the MFEM build, as follows: download gslib-1.0.9, untar it at
+  the same level as MFEM and create a symbolic link: "ln -s gslib-1.0.9 gslib".
+  Build gslib in parallel or in serial based on the desired MFEM build: "make
+  clean; make CC=mpicc" or "make clean; make CC=gcc MPI=0". Build MFEM with
+  MFEM_USE_GSLIB=YES.
+  URL: https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
+  Options: GSLIB_OPT, GSLIB_LIB.
+  Versions: GSLIB >= 1.0.9.
+
+Follow the above instruction. The whole process might be as follows:
+
 ```sh
-~> git clone https://github.com/CEED/GSLIB.git
-~> cd GSLIB
-~/GSLIB> make CC=mpicc
-~/GSLIB> cd ..
-~> ln -s GSLIB gslib
+wget https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
+tar xzvf v1.0.9.tar.gz
+ln -s gslib-1.0.9 gslib
+cd gslib
+make CC=mpicc
 ```
 
 ### Build MFEM
