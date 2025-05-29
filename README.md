@@ -183,7 +183,7 @@ Once built, hypre and METIS are expected to be on the same level as the `Laghost
 Laghost/  hypre  metis-5.1.0
 ```
 
-#### Build hypre: e.g.,
+#### Build hypre
 
 ```sh
 git clone https://github.com/hypre-space/hypre
@@ -192,7 +192,9 @@ cd hypre/src
 make -j
 ```
 
-#### Build METIS:
+#### Build METIS
+
+From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL).
 
 - METIS (a family of multilevel partitioning algorithms)
   https://github.com/mfem/tpls
@@ -211,7 +213,7 @@ make -j
   ```
 - This build is optional but recommended.
 
-### Build GSLIB:
+### Build GSLIB
 
   GSLIB (optional), used when MFEM_USE_GSLIB = YES. The gslib library must be
   built prior to the MFEM build, as follows: download gslib-1.0.9, untar it at
