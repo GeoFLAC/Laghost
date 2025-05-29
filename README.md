@@ -202,22 +202,27 @@ For large runs (problem size above 2 billion unknowns), add the
 #### Build METIS:
 
 ```sh
+git clone https://github.com/KarypisLab/GKlib
+cd GKlib
+make config prefix=./
+make install
+cd ..
 git clone https://github.com/KarypisLab/METIS
 cd METIS
-make
+make config cc=mpicc gklib_path=../GKlib/build/Linux-x86_64 prefix=./
+make install
 ```
 
-or
+This build is optional, as MFEM can be build without METIS by specifying
+`MFEM_USE_METIS = NO` below.
 
-```sh
+<!--```sh
 ~> tar -zxvf metis-4.0.3.tar.gz
 ~> cd metis-4.0.3
 ~/metis-4.0.3> make
 ~/metis-4.0.3> cd ..
 ~> ln -s metis-4.0.3 metis-4.0
-```
-This build is optional, as MFEM can be build without METIS by specifying
-`MFEM_USE_METIS = NO` below.
+```-->
 
 ### Build GSLIB:
 
