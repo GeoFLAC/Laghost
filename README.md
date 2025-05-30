@@ -134,20 +134,25 @@ Laghost has the following external dependencies:
 -  MFEM, core library for arbitrary-order finite elements<br>
    https://github.com/mfem/mfem
 
+### Clone Laghost
+
+```sh
+$ git clone https://github.com/GeoFLAC/Laghost.git
+```
+
 ### Build boost:
 
 ```sh
 apt install libboost-program-options-dev
 ```
 
-or
+Or download a release package and install it locally: e.g.,
 
 ```sh
-~> tar -zxvf boost_1_84_0.tar.gz
-~> cd boost_1_84_0/src/
-~/boost_1_84_0/src> ./bootstrap.sh
-~/boost_1_84_0/src> ./b2 --with-program_options -q
-~/boost_1_84_0/src> cd ..
+$ tar xzvf boost_1_88_0.tar.gz
+$ cd boost_1_88_0
+$ ./bootstrap.sh
+$ ./b2 --with-program_options -q
 ```
 
 ### hypre and METIS 
@@ -157,9 +162,10 @@ share the same code base. The only prerequisite for building the serial version
 of MFEM is a (modern) C++ compiler, such as g++. The parallel version of MFEM
 requires an MPI C++ compiler, hypre and METIS.
 
-Once built, hypre and METIS are expected to be on the same level as the `Laghost` directory: e.g.,
+hypre and METIS are expected to be on the same level as the `Laghost` directory: e.g.,
+
 ```sh
-~> ls
+$ ls
 Laghost/  hypre  metis-5.1.0
 ```
 
@@ -174,7 +180,7 @@ make -j
 
 #### Build METIS
 
-From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL).
+From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
 
 - METIS (a family of multilevel partitioning algorithms)
   https://github.com/mfem/tpls
@@ -208,33 +214,29 @@ From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL).
 Follow the above instruction. The whole process might be as follows:
 
 ```sh
-wget https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
-tar xzvf v1.0.9.tar.gz
-ln -s gslib-1.0.9 gslib
-cd gslib
-make CC=mpicc
+$ wget https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
+$ tar xzvf v1.0.9.tar.gz
+$ ln -s gslib-1.0.9 gslib
+$ ls
+gslib-1.0.9  gslib  hypre  metis-5.1.0 
+$ cd gslib
+$ make CC=mpicc
 ```
 
 ### Build MFEM
 
 Clone and build the parallel version of MFEM:
 ```sh
-~> git clone https://github.com/mfem/mfem.git ./mfem
-~> cd mfem/
-~/mfem> git checkout master
-~/mfem> cp ../Laghost/mfem_modification/vector* ./linalg/
-~/mfem> make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../metis-5.1.0
-~/mfem> cd ..
+$ git clone https://github.com/mfem/mfem.git ./mfem
+$ ls
+Laghost/  gslib-1.0.9  gslib  hypre  metis-5.1.0  mfem
+$ cd mfem
+$ make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../metis-5.1.0
 ```
 
-Clone and build the cuda version of MFEM:
+To build the cuda version of MFEM:
 ```sh
-~> git clone https://github.com/mfem/mfem.git ./mfem
-~> cd mfem/
-~/mfem> git checkout master
-~/mfem> cp ../Laghost/mfem_modification/vector* ./linalg/
-~/mfem> make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../metis-5.1.0
-~/mfem> cd ..
+$ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../metis-5.1.0
 ```
 
 The above uses the `master` branch of MFEM.
@@ -243,8 +245,15 @@ See the [MFEM building page](http://mfem.org/building/) for additional details.
 ### Build Laghost
 
 ```sh
+$ git clone https://github.com/GeoFLAC/Laghost.git
 ~> cd Laghost/
 ~/Laghost> make -j
+```
+
+If `libboost-program-options.so` is locally installed, specify its location as follows:
+
+```sh
+make -j PROGRAMOPTIONS_LIBDIR=../boost_1_88_0/stage/lib
 ```
 
 <!-- This can be followed by `make test` and `make install` to check and install the
