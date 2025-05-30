@@ -191,11 +191,13 @@ From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
 
 - Follow https://mfem.org/building/#parallel-build-using-metis-5
   ```sh
-  ~> tar zvxf metis-5.1.0.tar.gz
-  ~> cd metis-5.1.0
-  ~/metis-5.1.0> make BUILDDIR=lib config
-  ~/metis-5.1.0> make BUILDDIR=lib
-  ~/metis-5.1.0> cp lib/libmetis/libmetis.a lib
+  $ git https://github.com/mfem/tpls.git mfem-tpls
+  $ cd mfem-tpls
+  $ tar xzvf metis-5.1.0.tar.gz
+  $ cd metis-5.1.0
+  $ make BUILDDIR=lib config
+  $ make BUILDDIR=lib
+  $ cp lib/libmetis/libmetis.a lib
   ```
 - This build is optional but recommended.
 
@@ -231,12 +233,12 @@ $ git clone https://github.com/mfem/mfem.git ./mfem
 $ ls
 Laghost/  gslib-1.0.9  gslib  hypre  metis-5.1.0  mfem
 $ cd mfem
-$ make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../metis-5.1.0
+$ make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
 ```
 
 To build the cuda version of MFEM:
 ```sh
-$ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../metis-5.1.0
+$ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
 ```
 
 The above uses the `master` branch of MFEM.
