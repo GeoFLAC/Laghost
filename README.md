@@ -121,24 +121,118 @@ Other computational motives in Laghost include the following:
 
 ## Building
 
-Laghost has the following external dependencies:
+The parallel build of MFEM has the following external dependencies:
 
--  Working MPI compiler
--  hypre, used for parallel linear algebra<br>
-   https://github.com/hypre-space/hypre
--  METIS, used for parallel domain decomposition<br>
-   https://github.com/KarypisLab/METIS
--  boost-program-options, used for input file system<br>
-   https://www.boost.org/
--  GSLIb for  
+-  MPI compiler
+-  hypre: https://github.com/hypre-space/hypre
+-  METIS: See below
+
+Laghost has these additional dependencies:
+-  GSLIb, used for remeshing. See below
 -  MFEM, core library for arbitrary-order finite elements<br>
    https://github.com/mfem/mfem
+-  boost-program-options, used for input file system<br>
+   https://www.boost.org/
 
-### Clone Laghost
+The MFEM library has a serial and an MPI-based parallel version, which largely
+share the same code base. The only prerequisite for building the serial version
+of MFEM is a (modern) C++ compiler, such as g++. The parallel version of MFEM
+requires an MPI C++ compiler, hypre and METIS.
+
+### Clone MFEM
 
 ```sh
-$ git clone https://github.com/GeoFLAC/Laghost.git
+git clone https://github.com/mfem/mfem.git
 ```
+
+#### Build hypre
+
+hypre is expected to be on the same level as the `Laghost` directory: e.g.,
+
+```sh
+$ ls
+mfem
+$ git clone https://github.com/hypre-space/hypre
+$ ls
+hypre  mfem
+$ cd hypre/src
+$ ./configure --disable-fortran
+$ make -j
+```
+
+#### Build METIS
+
+From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
+
+- METIS (a family of multilevel partitioning algorithms)
+  https://github.com/mfem/tpls
+
+  Note: We recommend our mirror of metis-4.0.3/5.1.0 above because the METIS
+  webpage, http://glaros.dtc.umn.edu/gkhome/metis/metis/overview, is often down
+  and we don't support yet the new repo https://github.com/KarypisLab/METIS.
+
+- Follow https://mfem.org/building/#parallel-build-using-metis-5
+  ```sh
+  $ ls
+  hypre  mfem
+  $ git https://github.com/mfem/tpls.git mfem-tpls
+  $ ls
+  hypre  mfem  mfem-tpls
+  $ cd mfem-tpls
+  $ tar xzvf metis-5.1.0.tar.gz
+  $ cd metis-5.1.0
+  $ make BUILDDIR=lib config
+  $ make BUILDDIR=lib
+  $ cp lib/libmetis/libmetis.a lib
+  ```
+- This build is optional but recommended.
+
+### Build GSLIB
+
+From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
+
+>  GSLIB (optional), used when MFEM_USE_GSLIB = YES. The gslib library must be
+>  built prior to the MFEM build, as follows: download gslib-1.0.9, untar it at
+>  the same level as MFEM and create a symbolic link: "ln -s gslib-1.0.9 gslib".
+>  Build gslib in parallel or in serial based on the desired MFEM build: "make
+>  clean; make CC=mpicc" or "make clean; make CC=gcc MPI=0". Build MFEM with
+>  MFEM_USE_GSLIB=YES.
+  
+- URL: https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
+- Options: GSLIB_OPT, GSLIB_LIB.
+- Versions: GSLIB >= 1.0.9.
+
+Follow the above instruction. The whole process might be as follows:
+
+```sh
+$ ls
+hypre  mfem  mfem-tpls  
+$ wget https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
+$ tar xzvf v1.0.9.tar.gz
+$ ln -s gslib-1.0.9 gslib
+$ ls
+gslib-1.0.9  gslib  hypre  mfem  mfem-tpls
+$ cd gslib
+$ make CC=mpicc
+```
+
+### Build MFEM
+
+Clone and build the parallel version of MFEM:
+```sh
+$ ls
+gslib-1.0.9  gslib  hypre  mfem  mfem-tpls
+$ cd mfem
+$ make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
+```
+
+To build the cuda version of MFEM:
+```sh
+$ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
+```
+
+The above uses the `master` branch of MFEM.
+See the [MFEM building page](http://mfem.org/building/) for additional details.
 
 ### Build boost:
 
@@ -155,101 +249,19 @@ $ ./bootstrap.sh
 $ ./b2 --with-program_options -q
 ```
 
-### hypre and METIS 
-
-The MFEM library has a serial and an MPI-based parallel version, which largely
-share the same code base. The only prerequisite for building the serial version
-of MFEM is a (modern) C++ compiler, such as g++. The parallel version of MFEM
-requires an MPI C++ compiler, hypre and METIS.
-
-hypre and METIS are expected to be on the same level as the `Laghost` directory: e.g.,
-
-```sh
-$ ls
-Laghost/  hypre  metis-5.1.0
-```
-
-#### Build hypre
-
-```sh
-git clone https://github.com/hypre-space/hypre
-cd hypre/src
-./configure --disable-fortran
-make -j
-```
-
-#### Build METIS
-
-From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
-
-- METIS (a family of multilevel partitioning algorithms)
-  https://github.com/mfem/tpls
-
-  Note: We recommend our mirror of metis-4.0.3/5.1.0 above because the METIS
-  webpage, http://glaros.dtc.umn.edu/gkhome/metis/metis/overview, is often down
-  and we don't support yet the new repo https://github.com/KarypisLab/METIS.
-
-- Follow https://mfem.org/building/#parallel-build-using-metis-5
-  ```sh
-  $ git https://github.com/mfem/tpls.git mfem-tpls
-  $ cd mfem-tpls
-  $ tar xzvf metis-5.1.0.tar.gz
-  $ cd metis-5.1.0
-  $ make BUILDDIR=lib config
-  $ make BUILDDIR=lib
-  $ cp lib/libmetis/libmetis.a lib
-  ```
-- This build is optional but recommended.
-
-### Build GSLIB
-
-  GSLIB (optional), used when MFEM_USE_GSLIB = YES. The gslib library must be
-  built prior to the MFEM build, as follows: download gslib-1.0.9, untar it at
-  the same level as MFEM and create a symbolic link: "ln -s gslib-1.0.9 gslib".
-  Build gslib in parallel or in serial based on the desired MFEM build: "make
-  clean; make CC=mpicc" or "make clean; make CC=gcc MPI=0". Build MFEM with
-  MFEM_USE_GSLIB=YES.
-  URL: https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
-  Options: GSLIB_OPT, GSLIB_LIB.
-  Versions: GSLIB >= 1.0.9.
-
-Follow the above instruction. The whole process might be as follows:
-
-```sh
-$ wget https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
-$ tar xzvf v1.0.9.tar.gz
-$ ln -s gslib-1.0.9 gslib
-$ ls
-gslib-1.0.9  gslib  hypre  metis-5.1.0 
-$ cd gslib
-$ make CC=mpicc
-```
-
-### Build MFEM
-
-Clone and build the parallel version of MFEM:
-```sh
-$ git clone https://github.com/mfem/mfem.git ./mfem
-$ ls
-Laghost/  gslib-1.0.9  gslib  hypre  metis-5.1.0  mfem
-$ cd mfem
-$ make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
-```
-
-To build the cuda version of MFEM:
-```sh
-$ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
-```
-
-The above uses the `master` branch of MFEM.
-See the [MFEM building page](http://mfem.org/building/) for additional details.
- 
-### Build Laghost
+### Clone Laghost
 
 ```sh
 $ git clone https://github.com/GeoFLAC/Laghost.git
-~> cd Laghost/
-~/Laghost> make -j
+$ ls
+Laghost  gslib-1.0.9  gslib  hypre  mfem  mfem-tpls
+```
+
+### Build Laghost
+
+```sh
+$ cd Laghost/
+$ make -j
 ```
 
 If `libboost-program-options.so` is locally installed, specify its location as follows:
@@ -274,25 +286,25 @@ the following versions of Laghost have been developed
   This version supports dynamic adaptive mesh refinement.
  -->
 
-### Running Laghost
+## Running Laghost
 
 ```sh
-laghost 
+./laghost 
 ```
 Parameters in `defaults.cfg` will be used.
 
 ```sh
-mpirun -np 8 laghost -i ./input_parameters.cfg
+mpirun -np 8 ./laghost -i ./input_parameters.cfg
 ```
 to use a user-provided input file, `input_parameters.cfg` and run laghost on 8 cores.
 
 For other available command-line options, 
 
 ```sh
-laghost -h
+./laghost -h
 ```
 
-### Visualizing Laghost output
+## Visualizing Laghost output
 
 Use ParaView to load `results/Laghost/Laghost.pvd`
 
