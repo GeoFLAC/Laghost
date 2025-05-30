@@ -218,7 +218,8 @@ $ make CC=mpicc
 
 ### Build MFEM
 
-Clone and build the parallel version of MFEM:
+Build the parallel version of MFEM:
+
 ```sh
 $ ls
 gslib-1.0.9  gslib  hypre  mfem  mfem-tpls
@@ -227,6 +228,7 @@ $ make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/
 ```
 
 To build the cuda version of MFEM:
+
 ```sh
 $ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
 ```
@@ -234,7 +236,7 @@ $ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../
 The above uses the `master` branch of MFEM.
 See the [MFEM building page](http://mfem.org/building/) for additional details.
 
-### Build boost:
+### Install boost:
 
 ```sh
 apt install libboost-program-options-dev
