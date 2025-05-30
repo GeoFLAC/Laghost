@@ -12,10 +12,11 @@
 time-dependent momentum balance of geological media in a moving
 Lagrangian frame using unstructured high-order finite element spatial
 discretization and explicit high-order time-stepping.
-[MFEM](http://mfem.org) is a modular parallel C++ library to enable high-performance scalable finite element discretization. 
-LAGHOST extends the capabilities of the [Laghos](https://github.com/CEED/Laghos) (Lagrangian High-Order Solver) one of mini-apps of MFEM, which solves 
+
+Laghost extends the capabilities of the [Laghos](https://github.com/CEED/Laghos) (Lagrangian High-Order Solver) one of mini-apps of [MFEM](http://mfem.org), a modular parallel C++ library to enable high-performance scalable finite element discretization. Laghos solves 
 the time-dependent Euler equations of compressible gas dynamics in a moving Lagrangian frame 
 using high-order finite element spatial discretization and explicit time-stepping (Runge-Kutta method).
+Laghost inherits most of these features.
 
 > Veselin A. Dobrev, Tzanio V. Kolev, and Robert N. Riebenn <br>
 > [High-order curvilinear finite element methods for Lagrangian hydrodynamics](https://doi.org/10.1137/120864672) <br>
@@ -24,26 +25,6 @@ using high-order finite element spatial discretization and explicit time-steppin
 > Robert W. Anderson, Veselin A. Dobrev, Tzanio V. Kolev, Robert N. Rieben, and Vladimir Z. <br>
 > [High-Order Multi-Material ALE Hydrodynamics](https://doi.org/10.1137/17M1116453) <br>
 > *Computational Methods in Science and Engineering*, (40) 2018.
-
-<!-- Laghos captures the basic structure of many compressible shock hydrocodes,
-including the [BLAST code](http://llnl.gov/casc/blast) at [Lawrence Livermore
-National Laboratory](http://llnl.gov). The miniapp is built on top of a general
-discretization library, [MFEM](http://mfem.org), thus separating the pointwise
-physics from finite element and meshing concerns.
-
-The Laghos miniapp is part of the [CEED software suite](http://ceed.exascaleproject.org/software),
-a collection of software benchmarks, miniapps, libraries and APIs for
-efficient exascale discretizations based on high-order finite element
-and spectral element methods. See http://github.com/ceed for more
-information and source code availability.
-
-The CEED research is supported by the [Exascale Computing Project](https://exascaleproject.org/exascale-computing-project)
-(17-SC-20-SC), a collaborative effort of two U.S. Department of Energy
-organizations (Office of Science and the National Nuclear Security
-Administration) responsible for the planning and preparation of a
-[capable exascale ecosystem](https://exascaleproject.org/what-is-exascale),
-including software, applications, hardware, advanced system engineering and early
-testbed platforms, in support of the nation’s exascale computing imperative. -->
 
 ## Characteristics
 
@@ -66,7 +47,7 @@ necessary operations. As the local action is defined by utilizing the tensor
 structure of the finite element spaces, the amount of data storage, memory
 transfers, and FLOPs are lower (especially for higher orders).
 
-The mother code, Laghos, implementation includes support for hardware devices, such
+Like the parent code, Laghos, Laghost can support, in principle, hardware devices, such
 as GPUs, and programming models, such as CUDA, OCCA, RAJA and OpenMP,
 based on [MFEM](http://mfem.org), version 4.1 or later. These device
 backends are selectable at runtime, see the `-d/--device` command-line
@@ -94,8 +75,7 @@ Other computational motives in Laghost include the following:
   partially assembled) and is applied just twice per "assembly". Both the
   preparation and the application costs are important for this operator.
 - Domain-decomposed MPI parallelism.
-- Optional in-situ visualization with [GLVis](http:/glvis.org) and data output
-  for visualization and data analysis with [VisIt](http://visit.llnl.gov) and [ParaView](https://www.paraview.org/).
+- Data output for visualization and data analysis with [VisIt](http://visit.llnl.gov) and [ParaView](https://www.paraview.org/).
 - Rock rhelogies : Compressible elastic medium, Mohr-Coulomb rate-independnt and rate-independent plasticity, 
   plastic softening based on accumulated plastic strain for cohesion, friction coefficient, and dilation coefficient.
 - Mass scaling for *mass matrices* to achieve year-length time step size.
@@ -282,11 +262,23 @@ the following versions of Laghost have been developed
 - **AMR** version in the [amr/](./amr/README.md) directory.
   This version supports dynamic adaptive mesh refinement.
  -->
--->
 
-## Running
+### Running Laghost
 
-**TBA**
+```sh
+laghost 
+```
+Parameters in `defaults.cfg` will be used.
+
+For available command-line options, 
+
+```sh
+laghost -h
+```
+
+### Visualizing Laghost output
+
+Use ParaView to load `results/Laghost/Laghost.pvd`
 
 ## Contact
 
