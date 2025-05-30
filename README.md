@@ -270,7 +270,12 @@ laghost
 ```
 Parameters in `defaults.cfg` will be used.
 
-For available command-line options, 
+```sh
+mpirun -np 8 laghost -i ./input_parameters.cfg
+```
+to use a user-provided input file, `input_parameters.cfg` and run laghost on 8 cores.
+
+For other available command-line options, 
 
 ```sh
 laghost -h
