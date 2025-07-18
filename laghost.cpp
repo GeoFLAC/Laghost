@@ -73,6 +73,7 @@ struct AppState;
 void initialize(AppState& appState, int argc, char *argv[]);
 void run(AppState& appState);
 void finalize(AppState& appState);
+void print_progress(const int ti, AppState &appState);
 
 
 // Choice for the problem setup.
@@ -618,61 +619,61 @@ void initial_velocity(const Vector &x, Vector &v)
 // =============================================================================
 struct AppState
 {
-    // Core Simulation Objects
-    Param param;
-    std::unique_ptr<ParMesh> pmesh;
-    std::unique_ptr<geodynamics::LagrangianGeoOperator> geo;
-    std::unique_ptr<ODESolver> ode_solver;
-    std::unique_ptr<ODESolver> ode_solver_sub;
-    std::unique_ptr<ODESolver> ode_solver_sub2;
+   // Core Simulation Objects
+   Param param;
+   std::unique_ptr<ParMesh> pmesh;
+   std::unique_ptr<geodynamics::LagrangianGeoOperator> geo;
+   std::unique_ptr<ODESolver> ode_solver;
+   std::unique_ptr<ODESolver> ode_solver_sub;
+   std::unique_ptr<ODESolver> ode_solver_sub2;
 
-    // FE Collections and Spaces
-    std::unique_ptr<H1_FECollection> H1FEC;
-    std::unique_ptr<L2_FECollection> L2FEC;
-    std::unique_ptr<L2_FECollection> L2FEC_positive;
-    std::unique_ptr<ParFiniteElementSpace> H1FESpace;
-    std::unique_ptr<ParFiniteElementSpace> L2FESpace;
-    std::unique_ptr<ParFiniteElementSpace> L2FESpace_stress;
-    std::unique_ptr<ParFiniteElementSpace> L2FESpace_mat;
+   // FE Collections and Spaces
+   std::unique_ptr<H1_FECollection> H1FEC;
+   std::unique_ptr<L2_FECollection> L2FEC;
+   std::unique_ptr<L2_FECollection> L2FEC_positive;
+   std::unique_ptr<ParFiniteElementSpace> H1FESpace;
+   std::unique_ptr<ParFiniteElementSpace> L2FESpace;
+   std::unique_ptr<ParFiniteElementSpace> L2FESpace_stress;
+   std::unique_ptr<ParFiniteElementSpace> L2FESpace_mat;
 
-    // State Vectors and GridFunctions
-    BlockVector S;
-    Array<int> offset;
-    Array<int> ess_tdofs;
+   // State Vectors and GridFunctions
+   BlockVector S;
+   Array<int> offset;
+   Array<int> ess_tdofs;
 
-    ParGridFunction x_gf, v_gf, e_gf, s_gf;
-    ParGridFunction u_gf, p_gf, n_p_gf, ini_p_gf, s_old_gf, p_gf_old, ini_p_old_gf, x_old_gf;
-    ParGridFunction rho0_gf, fictitious_rho0_gf, lambda0_gf, mu0_gf, mat_gf;
-    ParGridFunction x_ini_gf, vol_ini_gf, skew_ini_gf;
-    ParGridFunction comp_gf, comp_ref_gf;
+   ParGridFunction x_gf, v_gf, e_gf, s_gf;
+   ParGridFunction u_gf, p_gf, n_p_gf, ini_p_gf, s_old_gf, p_gf_old, ini_p_old_gf, x_old_gf;
+   ParGridFunction rho0_gf, fictitious_rho0_gf, lambda0_gf, mu0_gf, mat_gf;
+   ParGridFunction x_ini_gf, vol_ini_gf, skew_ini_gf;
+   ParGridFunction comp_gf, comp_ref_gf;
 
-    // Submesh and Boundary Objects
-    std::unique_ptr<ParSubMesh> submesh;
-    std::unique_ptr<ParSubMesh> submesh_bottom;
-    std::unique_ptr<ParFiniteElementSpace> sub_fespace0;
-    std::unique_ptr<ParFiniteElementSpace> sub_fespace1;
-    std::unique_ptr<ParFiniteElementSpace> sub_fespace2;
-    std::unique_ptr<ParFiniteElementSpace> sub_fespace3;
+   // Submesh and Boundary Objects
+   std::unique_ptr<ParSubMesh> submesh;
+   std::unique_ptr<ParSubMesh> submesh_bottom;
+   std::unique_ptr<ParFiniteElementSpace> sub_fespace0;
+   std::unique_ptr<ParFiniteElementSpace> sub_fespace1;
+   std::unique_ptr<ParFiniteElementSpace> sub_fespace2;
+   std::unique_ptr<ParFiniteElementSpace> sub_fespace3;
 
-    ParGridFunction x_top, topo, x_bottom, bottom;
-    Vector topo_t, topo_t_old, bottom_t, bottom_t_old;
-    std::unique_ptr<ConductionOperator> oper_sub;
-    std::unique_ptr<ConductionOperator> oper_sub2;
+   ParGridFunction x_top, topo, x_bottom, bottom;
+   Vector topo_t, topo_t_old, bottom_t, bottom_t_old;
+   std::unique_ptr<ConductionOperator> oper_sub;
+   std::unique_ptr<ConductionOperator> oper_sub2;
 
-    // Time and Loop Control
-    double t = 0.0, dt = 1.0;
-    bool last_step = false;
-    int steps = 0;
+   // Time and Loop Control
+   double t = 0.0, dt = 1.0;
+   bool last_step = false;
+   int steps = 0;
 
-    // Visualization and I/O
-    std::unique_ptr<VisItDataCollection> visit_dc;
-    ParaViewDataCollection *pd = nullptr;
-    socketstream vis_rho, vis_v, vis_e;
-    std::unique_ptr<VectorFunctionCoefficient> v_coeff;
+   // Visualization and I/O
+   std::unique_ptr<VisItDataCollection> visit_dc;
+   ParaViewDataCollection *pd = nullptr;
+   socketstream vis_rho, vis_v, vis_e;
+   std::unique_ptr<VectorFunctionCoefficient> v_coeff;
 
-    // Finalization Variables
-    double energy_init = 0.0;
-    int checks = 0;
+   // Finalization Variables
+   double energy_init = 0.0;
+   int checks = 0;
 };
 
 
@@ -681,324 +682,324 @@ struct AppState
 // =============================================================================
 void initialize(AppState& appState, int argc, char *argv[])
 {
-    Mpi::Init();
-    int myid = Mpi::WorldRank();
-    Hypre::Init();
+   Mpi::Init();
+   int myid = Mpi::WorldRank();
+   Hypre::Init();
 
-    if (Mpi::Root()) { display_banner(cout); }
+   if (Mpi::Root()) { display_banner(cout); }
 
-    OptionsParser args(argc, argv);
-    read_and_assign_input_parameters(args, appState.param, myid);
+   OptionsParser args(argc, argv);
+   read_and_assign_input_parameters(args, appState.param, myid);
 
-    Device backend;
-    backend.Configure(appState.param.sim.device, appState.param.sim.dev);
-    if (Mpi::Root()) { backend.Print(); }
-    backend.SetGPUAwareMPI(appState.param.sim.gpu_aware_mpi);
+   Device backend;
+   backend.Configure(appState.param.sim.device, appState.param.sim.dev);
+   if (Mpi::Root()) { backend.Print(); }
+   backend.SetGPUAwareMPI(appState.param.sim.gpu_aware_mpi);
 
-    Mesh *mesh = nullptr;
-    Generate_and_refine_initial_mesh(mesh, appState.param);
-    Partition_initial_mesh(appState.pmesh, mesh, appState.param);
+   Mesh *mesh = nullptr;
+   Generate_and_refine_initial_mesh(mesh, appState.param);
+   Partition_initial_mesh(appState.pmesh, mesh, appState.param);
 
-    Vector bb_center(appState.pmesh->Dimension());
-    Vector bb_length(appState.pmesh->Dimension());
-    Collect_boundingbox_info(appState.pmesh.get(), appState.param, bb_center, bb_length);
+   Vector bb_center(appState.pmesh->Dimension());
+   Vector bb_length(appState.pmesh->Dimension());
+   Collect_boundingbox_info(appState.pmesh.get(), appState.param, bb_center, bb_length);
 
-    appState.L2FEC.reset(new L2_FECollection(appState.param.mesh.order_e, dim, BasisType::GaussLobatto));
-    appState.H1FEC.reset(new H1_FECollection(appState.param.mesh.order_v, dim));
-    appState.L2FEC_positive.reset(new L2_FECollection(appState.param.mesh.order_e, dim, BasisType::Positive));
+   appState.L2FEC.reset(new L2_FECollection(appState.param.mesh.order_e, dim, BasisType::GaussLobatto));
+   appState.H1FEC.reset(new H1_FECollection(appState.param.mesh.order_v, dim));
+   appState.L2FEC_positive.reset(new L2_FECollection(appState.param.mesh.order_e, dim, BasisType::Positive));
 
-    appState.L2FESpace.reset(new ParFiniteElementSpace(appState.pmesh.get(), appState.L2FEC.get()));
-    appState.L2FESpace_stress.reset(new ParFiniteElementSpace(appState.pmesh.get(), appState.L2FEC.get(), 3*(dim-1)));
-    appState.H1FESpace.reset(new ParFiniteElementSpace(appState.pmesh.get(), appState.H1FEC.get(), appState.pmesh->Dimension()));
-    ParFiniteElementSpace L2FESpace_positive(appState.pmesh.get(), appState.L2FEC_positive.get());
+   appState.L2FESpace.reset(new ParFiniteElementSpace(appState.pmesh.get(), appState.L2FEC.get()));
+   appState.L2FESpace_stress.reset(new ParFiniteElementSpace(appState.pmesh.get(), appState.L2FEC.get(), 3*(dim-1)));
+   appState.H1FESpace.reset(new ParFiniteElementSpace(appState.pmesh.get(), appState.H1FEC.get(), appState.pmesh->Dimension()));
+   ParFiniteElementSpace L2FESpace_positive(appState.pmesh.get(), appState.L2FEC_positive.get());
 
-    ODESolver* temp_ode_solver = nullptr;
-    switch (appState.param.solver.ode_solver_type)
-    {
-       case 1: temp_ode_solver = new ForwardEulerSolver; break;
-       case 2: temp_ode_solver = new RK2Solver(0.5); break;
-       case 3: temp_ode_solver = new RK3SSPSolver; break;
-       case 4: temp_ode_solver = new RK4Solver; break;
-       case 6: temp_ode_solver = new RK6Solver; break;
-       case 7: temp_ode_solver = new RK2AvgSolver; break;
-       default:
-          if (myid == 0) { cout << "Unknown ODE solver type: " << appState.param.solver.ode_solver_type << '\n'; }
-          MPI_Finalize();
-          exit(3);
-    }
-    appState.ode_solver.reset(temp_ode_solver);
+   ODESolver* temp_ode_solver = nullptr;
+   switch (appState.param.solver.ode_solver_type)
+   {
+      case 1: temp_ode_solver = new ForwardEulerSolver; break;
+      case 2: temp_ode_solver = new RK2Solver(0.5); break;
+      case 3: temp_ode_solver = new RK3SSPSolver; break;
+      case 4: temp_ode_solver = new RK4Solver; break;
+      case 6: temp_ode_solver = new RK6Solver; break;
+      case 7: temp_ode_solver = new RK2AvgSolver; break;
+      default:
+         if (myid == 0) { cout << "Unknown ODE solver type: " << appState.param.solver.ode_solver_type << '\n'; }
+         MPI_Finalize();
+         exit(3);
+   }
+   appState.ode_solver.reset(temp_ode_solver);
 
-    appState.ode_solver_sub.reset(new RK2Solver(0.5));
-    appState.ode_solver_sub2.reset(new RK2Solver(0.5));
+   appState.ode_solver_sub.reset(new RK2Solver(0.5));
+   appState.ode_solver_sub2.reset(new RK2Solver(0.5));
 
-    appState.L2FESpace->Update();
-    appState.L2FESpace_stress->Update();
-    appState.H1FESpace->Update();
+   appState.L2FESpace->Update();
+   appState.L2FESpace_stress->Update();
+   appState.H1FESpace->Update();
 
-    const int Vsize_l2 = appState.L2FESpace->GetVSize();
-    const int Vsize_h1 = appState.H1FESpace->GetVSize();
-    appState.offset.SetSize(5);
-    appState.offset[0] = 0;
-    appState.offset[1] = appState.offset[0] + Vsize_h1;
-    appState.offset[2] = appState.offset[1] + Vsize_h1;
-    appState.offset[3] = appState.offset[2] + Vsize_l2;
-    appState.offset[4] = appState.offset[3] + Vsize_l2*3*(dim-1);
-    appState.S.Update(appState.offset, Device::GetMemoryType());
+   const int Vsize_l2 = appState.L2FESpace->GetVSize();
+   const int Vsize_h1 = appState.H1FESpace->GetVSize();
+   appState.offset.SetSize(5);
+   appState.offset[0] = 0;
+   appState.offset[1] = appState.offset[0] + Vsize_h1;
+   appState.offset[2] = appState.offset[1] + Vsize_h1;
+   appState.offset[3] = appState.offset[2] + Vsize_l2;
+   appState.offset[4] = appState.offset[3] + Vsize_l2*3*(dim-1);
+   appState.S.Update(appState.offset, Device::GetMemoryType());
 
-    appState.x_gf.MakeRef(appState.H1FESpace.get(), appState.S, appState.offset[0]);
-    appState.v_gf.MakeRef(appState.H1FESpace.get(), appState.S, appState.offset[1]);
-    appState.e_gf.MakeRef(appState.L2FESpace.get(), appState.S, appState.offset[2]);
-    appState.s_gf.MakeRef(appState.L2FESpace_stress.get(), appState.S, appState.offset[3]);
-    appState.pmesh->SetNodalGridFunction(&appState.x_gf);
-    appState.x_gf.SyncAliasMemory(appState.S);
+   appState.x_gf.MakeRef(appState.H1FESpace.get(), appState.S, appState.offset[0]);
+   appState.v_gf.MakeRef(appState.H1FESpace.get(), appState.S, appState.offset[1]);
+   appState.e_gf.MakeRef(appState.L2FESpace.get(), appState.S, appState.offset[2]);
+   appState.s_gf.MakeRef(appState.L2FESpace_stress.get(), appState.S, appState.offset[3]);
+   appState.pmesh->SetNodalGridFunction(&appState.x_gf);
+   appState.x_gf.SyncAliasMemory(appState.S);
 
-    Array<int> bdr_attrs(1);
-    bdr_attrs[0] = 4;
-    appState.submesh.reset(new ParSubMesh(ParSubMesh::CreateFromBoundary(*appState.pmesh, bdr_attrs)));
-    appState.sub_fespace0.reset(new ParFiniteElementSpace(appState.submesh.get(), appState.H1FEC.get(), appState.pmesh->Dimension()));
-    appState.sub_fespace1.reset(new ParFiniteElementSpace(appState.submesh.get(), appState.H1FEC.get()));
-    appState.x_top.SetSpace(appState.sub_fespace0.get());
-    appState.topo.SetSpace(appState.sub_fespace1.get());
-    appState.submesh->SetNodalGridFunction(&appState.x_top);
-    for (int i = 0; i < appState.topo.Size(); i++){appState.topo[i] = appState.x_top[i+appState.topo.Size()];}
-    appState.topo.GetTrueDofs(appState.topo_t); appState.topo_t_old = appState.topo_t;
+   Array<int> bdr_attrs(1);
+   bdr_attrs[0] = 4;
+   appState.submesh.reset(new ParSubMesh(ParSubMesh::CreateFromBoundary(*appState.pmesh, bdr_attrs)));
+   appState.sub_fespace0.reset(new ParFiniteElementSpace(appState.submesh.get(), appState.H1FEC.get(), appState.pmesh->Dimension()));
+   appState.sub_fespace1.reset(new ParFiniteElementSpace(appState.submesh.get(), appState.H1FEC.get()));
+   appState.x_top.SetSpace(appState.sub_fespace0.get());
+   appState.topo.SetSpace(appState.sub_fespace1.get());
+   appState.submesh->SetNodalGridFunction(&appState.x_top);
+   for (int i = 0; i < appState.topo.Size(); i++){appState.topo[i] = appState.x_top[i+appState.topo.Size()];}
+   appState.topo.GetTrueDofs(appState.topo_t); appState.topo_t_old = appState.topo_t;
 
-    Array<int> bdr_attrs_b(1);
-    bdr_attrs_b[0] = 3;
-    appState.submesh_bottom.reset(new ParSubMesh(ParSubMesh::CreateFromBoundary(*appState.pmesh, bdr_attrs_b)));
-    appState.sub_fespace2.reset(new ParFiniteElementSpace(appState.submesh_bottom.get(), appState.H1FEC.get(), appState.pmesh->Dimension()));
-    appState.sub_fespace3.reset(new ParFiniteElementSpace(appState.submesh_bottom.get(), appState.H1FEC.get()));
-    appState.x_bottom.SetSpace(appState.sub_fespace2.get());
-    appState.bottom.SetSpace(appState.sub_fespace3.get());
-    appState.submesh_bottom->SetNodalGridFunction(&appState.x_bottom);
-    for (int i = 0; i < appState.bottom.Size(); i++){appState.bottom[i] = appState.x_bottom[i+appState.bottom.Size()];}
-    appState.bottom.GetTrueDofs(appState.bottom_t); appState.bottom_t_old = appState.bottom_t;
+   Array<int> bdr_attrs_b(1);
+   bdr_attrs_b[0] = 3;
+   appState.submesh_bottom.reset(new ParSubMesh(ParSubMesh::CreateFromBoundary(*appState.pmesh, bdr_attrs_b)));
+   appState.sub_fespace2.reset(new ParFiniteElementSpace(appState.submesh_bottom.get(), appState.H1FEC.get(), appState.pmesh->Dimension()));
+   appState.sub_fespace3.reset(new ParFiniteElementSpace(appState.submesh_bottom.get(), appState.H1FEC.get()));
+   appState.x_bottom.SetSpace(appState.sub_fespace2.get());
+   appState.bottom.SetSpace(appState.sub_fespace3.get());
+   appState.submesh_bottom->SetNodalGridFunction(&appState.x_bottom);
+   for (int i = 0; i < appState.bottom.Size(); i++){appState.bottom[i] = appState.x_bottom[i+appState.bottom.Size()];}
+   appState.bottom.GetTrueDofs(appState.bottom_t); appState.bottom_t_old = appState.bottom_t;
 
-    appState.oper_sub.reset(new ConductionOperator(*appState.sub_fespace1, appState.param.bc.surf_alpha, appState.param.bc.surf_diff, appState.topo_t));
-    appState.oper_sub2.reset(new ConductionOperator(*appState.sub_fespace3, appState.param.bc.base_alpha, appState.param.bc.base_diff, appState.bottom_t));
+   appState.oper_sub.reset(new ConductionOperator(*appState.sub_fespace1, appState.param.bc.surf_alpha, appState.param.bc.surf_diff, appState.topo_t));
+   appState.oper_sub2.reset(new ConductionOperator(*appState.sub_fespace3, appState.param.bc.base_alpha, appState.param.bc.base_diff, appState.bottom_t));
 
-    ParFiniteElementSpace L2FESpace_xyz(appState.pmesh.get(), appState.L2FEC_positive.get(), dim);
-    ParGridFunction xyz_gf_l2(&L2FESpace_xyz);
-    VectorFunctionCoefficient xyz_coeff(appState.pmesh->Dimension(), xyz0);
-    xyz_gf_l2.ProjectCoefficient(xyz_coeff);
+   ParFiniteElementSpace L2FESpace_xyz(appState.pmesh.get(), appState.L2FEC_positive.get(), dim);
+   ParGridFunction xyz_gf_l2(&L2FESpace_xyz);
+   VectorFunctionCoefficient xyz_coeff(appState.pmesh->Dimension(), xyz0);
+   xyz_gf_l2.ProjectCoefficient(xyz_coeff);
 
-    appState.v_gf = 0.0;
-    appState.v_coeff.reset(new VectorFunctionCoefficient(appState.pmesh->Dimension(), initial_velocity));
-    appState.v_gf.ProjectCoefficient(*appState.v_coeff);
+   appState.v_gf = 0.0;
+   appState.v_coeff.reset(new VectorFunctionCoefficient(appState.pmesh->Dimension(), initial_velocity));
+   appState.v_gf.ProjectCoefficient(*appState.v_coeff);
 
-    double max_vbc_val = appState.param.control.max_vbc_val;
-    Array<int> ess_vdofs;
-    Array<int> ess_bdr(appState.pmesh->bdr_attributes.Max());
-    set_essential_bc( myid, appState.pmesh.get(), *appState.H1FESpace, appState.param, ess_bdr, appState.ess_tdofs, ess_vdofs, appState.v_gf, max_vbc_val );
-    appState.ess_tdofs.Read();
-    appState.v_gf.SyncAliasMemory(appState.S);
+   double max_vbc_val = appState.param.control.max_vbc_val;
+   Array<int> ess_vdofs;
+   Array<int> ess_bdr(appState.pmesh->bdr_attributes.Max());
+   set_essential_bc( myid, appState.pmesh.get(), *appState.H1FESpace, appState.param, ess_bdr, appState.ess_tdofs, ess_vdofs, appState.v_gf, max_vbc_val );
+   appState.ess_tdofs.Read();
+   appState.v_gf.SyncAliasMemory(appState.S);
 
-    int num_materials = appState.pmesh->attributes.Max();
-    if(num_materials != appState.param.mat.nmat)
-    {
-       if (myid == 0) {
-          cout << __FILE__<<":"<<__LINE__<< endl;
-          cout <<"\tThe number of mesh attributes, "<<num_materials<<", are not consistent with the number of materials, "<<appState.param.mat.nmat<<", in the input file."<< endl;
-       }
-       MPI_Finalize();
-       exit(3);
-    }
-    Vector rho0(appState.pmesh->attributes.Max());
-    Vector fictitious_rho0(appState.pmesh->attributes.Max());
-    double pseudo_speed =  max_vbc_val * appState.param.control.mscale;
-    double pseudo_speed_sqrd =  pseudo_speed * pseudo_speed;
-    for (int i = 0; i < appState.pmesh->attributes.Max(); i++) {
-       rho0[i] = appState.param.mat.rho[i];
-       fictitious_rho0[i] = (appState.param.mat.lambda[i] + 2*appState.param.mat.mu[i]) / pseudo_speed_sqrd;
-    }
-    PWConstCoefficient rho0_coeff(rho0);
-    appState.rho0_gf.SetSpace(appState.L2FESpace.get());
-    appState.rho0_gf.ProjectCoefficient(rho0_coeff);
+   int num_materials = appState.pmesh->attributes.Max();
+   if(num_materials != appState.param.mat.nmat)
+   {
+      if (myid == 0) {
+         cout << __FILE__<<":"<<__LINE__<< endl;
+         cout <<"\tThe number of mesh attributes, "<<num_materials<<", are not consistent with the number of materials, "<<appState.param.mat.nmat<<", in the input file."<< endl;
+      }
+      MPI_Finalize();
+      exit(3);
+   }
+   Vector rho0(appState.pmesh->attributes.Max());
+   Vector fictitious_rho0(appState.pmesh->attributes.Max());
+   double pseudo_speed =  max_vbc_val * appState.param.control.mscale;
+   double pseudo_speed_sqrd =  pseudo_speed * pseudo_speed;
+   for (int i = 0; i < appState.pmesh->attributes.Max(); i++) {
+      rho0[i] = appState.param.mat.rho[i];
+      fictitious_rho0[i] = (appState.param.mat.lambda[i] + 2*appState.param.mat.mu[i]) / pseudo_speed_sqrd;
+   }
+   PWConstCoefficient rho0_coeff(rho0);
+   appState.rho0_gf.SetSpace(appState.L2FESpace.get());
+   appState.rho0_gf.ProjectCoefficient(rho0_coeff);
 
-    PWConstCoefficient fictitious_rho0_coeff(fictitious_rho0);
-    appState.fictitious_rho0_gf.SetSpace(appState.L2FESpace.get());
-    appState.fictitious_rho0_gf.ProjectCoefficient(fictitious_rho0_coeff);
+   PWConstCoefficient fictitious_rho0_coeff(fictitious_rho0);
+   appState.fictitious_rho0_gf.SetSpace(appState.L2FESpace.get());
+   appState.fictitious_rho0_gf.ProjectCoefficient(fictitious_rho0_coeff);
 
-    ParGridFunction l2_e(&L2FESpace_positive);
-    if (appState.param.sim.problem == 1)
-    {
-       DeltaCoefficient e_coeff(0.0, 0.0, 0.0, 0.0);
-       l2_e.ProjectCoefficient(e_coeff);
-    }
-    else
-    {
-       FunctionCoefficient e_coeff(e0);
-       l2_e.ProjectCoefficient(e_coeff);
-    }
-    appState.e_gf.ProjectGridFunction(l2_e);
-    appState.e_gf.SyncAliasMemory(appState.S);
+   ParGridFunction l2_e(&L2FESpace_positive);
+   if (appState.param.sim.problem == 1)
+   {
+      DeltaCoefficient e_coeff(0.0, 0.0, 0.0, 0.0);
+      l2_e.ProjectCoefficient(e_coeff);
+   }
+   else
+   {
+      FunctionCoefficient e_coeff(e0);
+      l2_e.ProjectCoefficient(e_coeff);
+   }
+   appState.e_gf.ProjectGridFunction(l2_e);
+   appState.e_gf.SyncAliasMemory(appState.S);
 
-    if(appState.param.mat.lambda.Size() != appState.pmesh->attributes.Max() ||
-       appState.param.mat.mu.Size() != appState.pmesh->attributes.Max())
-    {
-        if (myid == 0){cout << "Material property arrays are not consistent with material IDs." << endl; }
-        MPI_Finalize();
-        exit(3);
-    }
-    PWConstCoefficient lambda_func(appState.param.mat.lambda);
-    appState.lambda0_gf.SetSpace(appState.L2FESpace.get());
-    appState.lambda0_gf.ProjectCoefficient(lambda_func);
+   if(appState.param.mat.lambda.Size() != appState.pmesh->attributes.Max() ||
+      appState.param.mat.mu.Size() != appState.pmesh->attributes.Max())
+   {
+      if (myid == 0){cout << "Material property arrays are not consistent with material IDs." << endl; }
+      MPI_Finalize();
+      exit(3);
+   }
+   PWConstCoefficient lambda_func(appState.param.mat.lambda);
+   appState.lambda0_gf.SetSpace(appState.L2FESpace.get());
+   appState.lambda0_gf.ProjectCoefficient(lambda_func);
 
-    PWConstCoefficient mu_func(appState.param.mat.mu);
-    appState.mu0_gf.SetSpace(appState.L2FESpace.get());
-    appState.mu0_gf.ProjectCoefficient(mu_func);
+   PWConstCoefficient mu_func(appState.param.mat.mu);
+   appState.mu0_gf.SetSpace(appState.L2FESpace.get());
+   appState.mu0_gf.ProjectCoefficient(mu_func);
 
-    Vector mat(appState.pmesh->attributes.Max());
-    for (int i = 0; i < mat.Size(); i++)
-       mat[i] = i;
-    PWConstCoefficient mat_func(mat);
-    appState.mat_gf.SetSpace(appState.L2FESpace.get());
-    appState.mat_gf.ProjectCoefficient(mat_func);
+   Vector mat(appState.pmesh->attributes.Max());
+   for (int i = 0; i < mat.Size(); i++)
+      mat[i] = i;
+   PWConstCoefficient mat_func(mat);
+   appState.mat_gf.SetSpace(appState.L2FESpace.get());
+   appState.mat_gf.ProjectCoefficient(mat_func);
 
-    appState.L2FESpace_mat.reset(new ParFiniteElementSpace(appState.pmesh.get(), appState.L2FEC.get(), num_materials));
-    appState.comp_gf.SetSpace(appState.L2FESpace_mat.get());
-    appState.comp_ref_gf.SetSpace(appState.L2FESpace_mat.get());
-    CompoCoefficient comp_coeff(num_materials, appState.mat_gf);
-    appState.comp_gf.ProjectCoefficient(comp_coeff);
-    appState.comp_ref_gf = appState.comp_gf;
+   appState.L2FESpace_mat.reset(new ParFiniteElementSpace(appState.pmesh.get(), appState.L2FEC.get(), num_materials));
+   appState.comp_gf.SetSpace(appState.L2FESpace_mat.get());
+   appState.comp_ref_gf.SetSpace(appState.L2FESpace_mat.get());
+   CompoCoefficient comp_coeff(num_materials, appState.mat_gf);
+   appState.comp_gf.ProjectCoefficient(comp_coeff);
+   appState.comp_ref_gf = appState.comp_gf;
 
-    appState.s_gf=0.0;
-    if( appState.param.control.gravity > 0.0 )
-    {
-       if(appState.param.control.lithostatic)
-       {
-          LithostaticCoefficient Lithostatic_coeff(dim, xyz_gf_l2, appState.rho0_gf, appState.param.control.gravity, appState.param.control.thickness);
-          appState.s_gf.ProjectCoefficient(Lithostatic_coeff);
-       }
-       else if(appState.param.control.atmospheric){
-          ATMCoefficient ATM_coeff(dim, xyz_gf_l2, appState.rho0_gf, appState.param.control.gravity, appState.param.control.thickness);
-          appState.s_gf.ProjectCoefficient(ATM_coeff);
-       }
-    }
-    appState.s_gf.SyncAliasMemory(appState.S);
-    appState.s_old_gf.SetSpace(appState.L2FESpace_stress.get());
-    appState.s_old_gf = appState.s_gf;
+   appState.s_gf=0.0;
+   if( appState.param.control.gravity > 0.0 )
+   {
+      if(appState.param.control.lithostatic)
+      {
+         LithostaticCoefficient Lithostatic_coeff(dim, xyz_gf_l2, appState.rho0_gf, appState.param.control.gravity, appState.param.control.thickness);
+         appState.s_gf.ProjectCoefficient(Lithostatic_coeff);
+      }
+      else if(appState.param.control.atmospheric){
+         ATMCoefficient ATM_coeff(dim, xyz_gf_l2, appState.rho0_gf, appState.param.control.gravity, appState.param.control.thickness);
+         appState.s_gf.ProjectCoefficient(ATM_coeff);
+      }
+   }
+   appState.s_gf.SyncAliasMemory(appState.S);
+   appState.s_old_gf.SetSpace(appState.L2FESpace_stress.get());
+   appState.s_old_gf = appState.s_gf;
 
-    appState.x_ini_gf.SetSpace(appState.H1FESpace.get());
-    appState.x_old_gf.SetSpace(appState.H1FESpace.get());
-    appState.x_ini_gf = appState.x_gf;
-    appState.x_old_gf = 0.0;
+   appState.x_ini_gf.SetSpace(appState.H1FESpace.get());
+   appState.x_old_gf.SetSpace(appState.H1FESpace.get());
+   appState.x_ini_gf = appState.x_gf;
+   appState.x_old_gf = 0.0;
 
-    appState.p_gf.SetSpace(appState.L2FESpace.get());
-    appState.p_gf_old.SetSpace(appState.L2FESpace.get());
-    appState.p_gf = 0.0; appState.p_gf_old = 0.0;
-    Vector weak_location(dim);
-    if(dim == 2){weak_location[0] = appState.param.mat.weak_x; weak_location[1] = appState.param.mat.weak_y;}
-    else if(dim ==3){weak_location[0] = appState.param.mat.weak_x; weak_location[1] = appState.param.mat.weak_y; weak_location[2] = appState.param.mat.weak_z;}
-    PlasticCoefficient p_coeff(dim, xyz_gf_l2, weak_location, appState.param.mat.weak_rad, appState.param.mat.ini_pls);
-    ParGridFunction l2_p_gf(&L2FESpace_positive);
-    l2_p_gf.ProjectCoefficient(p_coeff);
-    appState.p_gf.ProjectGridFunction(l2_p_gf);
-    appState.p_gf_old = appState.p_gf;
-    appState.ini_p_gf.SetSpace(appState.L2FESpace.get());
-    appState.ini_p_old_gf.SetSpace(appState.L2FESpace.get());
-    appState.n_p_gf.SetSpace(appState.L2FESpace.get());
-    appState.ini_p_gf = appState.p_gf; appState.ini_p_old_gf = appState.p_gf;
-    appState.n_p_gf = 0.0;
+   appState.p_gf.SetSpace(appState.L2FESpace.get());
+   appState.p_gf_old.SetSpace(appState.L2FESpace.get());
+   appState.p_gf = 0.0; appState.p_gf_old = 0.0;
+   Vector weak_location(dim);
+   if(dim == 2){weak_location[0] = appState.param.mat.weak_x; weak_location[1] = appState.param.mat.weak_y;}
+   else if(dim ==3){weak_location[0] = appState.param.mat.weak_x; weak_location[1] = appState.param.mat.weak_y; weak_location[2] = appState.param.mat.weak_z;}
+   PlasticCoefficient p_coeff(dim, xyz_gf_l2, weak_location, appState.param.mat.weak_rad, appState.param.mat.ini_pls);
+   ParGridFunction l2_p_gf(&L2FESpace_positive);
+   l2_p_gf.ProjectCoefficient(p_coeff);
+   appState.p_gf.ProjectGridFunction(l2_p_gf);
+   appState.p_gf_old = appState.p_gf;
+   appState.ini_p_gf.SetSpace(appState.L2FESpace.get());
+   appState.ini_p_old_gf.SetSpace(appState.L2FESpace.get());
+   appState.n_p_gf.SetSpace(appState.L2FESpace.get());
+   appState.ini_p_gf = appState.p_gf; appState.ini_p_old_gf = appState.p_gf;
+   appState.n_p_gf = 0.0;
 
-    appState.u_gf.SetSpace(appState.H1FESpace.get());
-    appState.u_gf = 0.0;
+   appState.u_gf.SetSpace(appState.H1FESpace.get());
+   appState.u_gf = 0.0;
 
-    int source = 0; bool visc = false, vorticity = false;
-    if (appState.param.solver.impose_visc) { visc = true; }
+   int source = 0; bool visc = false, vorticity = false;
+   if (appState.param.solver.impose_visc) { visc = true; }
 
-    appState.geo.reset(new geodynamics::LagrangianGeoOperator(appState.S.Size(),
-                                         *appState.H1FESpace, *appState.L2FESpace, *appState.L2FESpace_stress, appState.ess_tdofs,
-                                         appState.rho0_gf, appState.fictitious_rho0_gf,
-                                         appState.mat_gf, source,
-                                         visc, vorticity,
-                                         appState.lambda0_gf, appState.mu0_gf,
-                                         appState.param, max_vbc_val));
+   appState.geo.reset(new geodynamics::LagrangianGeoOperator(appState.S.Size(),
+                                       *appState.H1FESpace, *appState.L2FESpace, *appState.L2FESpace_stress, appState.ess_tdofs,
+                                       appState.rho0_gf, appState.fictitious_rho0_gf,
+                                       appState.mat_gf, source,
+                                       visc, vorticity,
+                                       appState.lambda0_gf, appState.mu0_gf,
+                                       appState.param, max_vbc_val));
 
-    char vishost[] = "localhost";
-    int visport = 19916;
+   char vishost[] = "localhost";
+   int visport = 19916;
 
-    appState.energy_init = appState.geo->InternalEnergy(appState.e_gf) +
-                           appState.geo->KineticEnergy(appState.v_gf);
+   appState.energy_init = appState.geo->InternalEnergy(appState.e_gf) +
+                        appState.geo->KineticEnergy(appState.v_gf);
 
-    if (appState.param.sim.visualization)
-    {
-       MPI_Barrier(appState.pmesh->GetComm());
-       appState.vis_rho.precision(8);
-       appState.vis_v.precision(8);
-       appState.vis_e.precision(8);
-       int Wx = 0, Wy = 0;
-       const int Ww = 350, Wh = 350;
-       int offx = Ww+10;
-       if (appState.param.sim.problem != 0 && appState.param.sim.problem != 4)
-       {
-          geodynamics::VisualizeField(appState.vis_rho, vishost, visport, appState.rho0_gf,
-                                        "Density", Wx, Wy, Ww, Wh);
-       }
-       Wx += offx;
-       geodynamics::VisualizeField(appState.vis_v, vishost, visport, appState.v_gf,
-                                     "Velocity", Wx, Wy, Ww, Wh);
-       Wx += offx;
-       geodynamics::VisualizeField(appState.vis_e, vishost, visport, appState.e_gf,
-                                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
-    }
+   if (appState.param.sim.visualization)
+   {
+      MPI_Barrier(appState.pmesh->GetComm());
+      appState.vis_rho.precision(8);
+      appState.vis_v.precision(8);
+      appState.vis_e.precision(8);
+      int Wx = 0, Wy = 0;
+      const int Ww = 350, Wh = 350;
+      int offx = Ww+10;
+      if (appState.param.sim.problem != 0 && appState.param.sim.problem != 4)
+      {
+         geodynamics::VisualizeField(appState.vis_rho, vishost, visport, appState.rho0_gf,
+                                       "Density", Wx, Wy, Ww, Wh);
+      }
+      Wx += offx;
+      geodynamics::VisualizeField(appState.vis_v, vishost, visport, appState.v_gf,
+                                    "Velocity", Wx, Wy, Ww, Wh);
+      Wx += offx;
+      geodynamics::VisualizeField(appState.vis_e, vishost, visport, appState.e_gf,
+                                    "Specific Internal Energy", Wx, Wy, Ww, Wh);
+   }
 
-    if (appState.param.sim.visit)
-    {
-       appState.visit_dc.reset(new VisItDataCollection(appState.param.sim.basename, appState.pmesh.get()));
-       appState.visit_dc->RegisterField("Density",  &appState.rho0_gf);
-       appState.visit_dc->RegisterField("Displacement", &appState.u_gf);
-       appState.visit_dc->RegisterField("Velocity", &appState.v_gf);
-       appState.visit_dc->RegisterField("Specific Internal Energy", &appState.e_gf);
-       appState.visit_dc->RegisterField("Stress", &appState.s_gf);
-       appState.visit_dc->RegisterField("Plastic Strain", &appState.p_gf);
-       appState.visit_dc->RegisterField("Non-inital Plastic Strain", &appState.n_p_gf);
-       appState.visit_dc->RegisterField("Composition", &appState.comp_gf);
-       appState.visit_dc->RegisterField("Lambda", &appState.lambda0_gf);
-       appState.visit_dc->RegisterField("Mu", &appState.mu0_gf);
-       appState.visit_dc->SetCycle(0);
-       appState.visit_dc->SetTime(0.0);
-       appState.visit_dc->Save();
-    }
+   if (appState.param.sim.visit)
+   {
+      appState.visit_dc.reset(new VisItDataCollection(appState.param.sim.basename, appState.pmesh.get()));
+      appState.visit_dc->RegisterField("Density",  &appState.rho0_gf);
+      appState.visit_dc->RegisterField("Displacement", &appState.u_gf);
+      appState.visit_dc->RegisterField("Velocity", &appState.v_gf);
+      appState.visit_dc->RegisterField("Specific Internal Energy", &appState.e_gf);
+      appState.visit_dc->RegisterField("Stress", &appState.s_gf);
+      appState.visit_dc->RegisterField("Plastic Strain", &appState.p_gf);
+      appState.visit_dc->RegisterField("Non-inital Plastic Strain", &appState.n_p_gf);
+      appState.visit_dc->RegisterField("Composition", &appState.comp_gf);
+      appState.visit_dc->RegisterField("Lambda", &appState.lambda0_gf);
+      appState.visit_dc->RegisterField("Mu", &appState.mu0_gf);
+      appState.visit_dc->SetCycle(0);
+      appState.visit_dc->SetTime(0.0);
+      appState.visit_dc->Save();
+   }
 
-    if (appState.param.sim.paraview)
-    {
-       appState.pd = new ParaViewDataCollection(appState.param.sim.basename, appState.pmesh.get());
-       appState.pd->RegisterField("Density",  &appState.rho0_gf);
-       appState.pd->RegisterField("Displacement", &appState.u_gf);
-       appState.pd->RegisterField("Velocity", &appState.v_gf);
-       appState.pd->RegisterField("Specific Internal Energy", &appState.e_gf);
-       appState.pd->RegisterField("Stress", &appState.s_gf);
-       appState.pd->RegisterField("Plastic Strain", &appState.p_gf);
-       appState.pd->RegisterField("inital Plastic Strain", &appState.ini_p_gf);
-       appState.pd->RegisterField("Non-inital Plastic Strain", &appState.n_p_gf);
-       // Geometric parameters would need to be added to AppState if used
-       // appState.pd->RegisterField("Geometric Parameters", &quality);
-       appState.pd->RegisterField("Composition", &appState.comp_gf);
-       appState.pd->RegisterField("Lambda", &appState.lambda0_gf);
-       appState.pd->RegisterField("Mu", &appState.mu0_gf);
-       appState.pd->SetLevelsOfDetail(appState.param.mesh.order_v);
-       appState.pd->SetDataFormat(VTKFormat::BINARY);
-       appState.pd->SetHighOrderOutput(true);
-       appState.pd->SetCycle(0);
-       appState.pd->SetTime(0.0);
-       appState.pd->Save();
-    }
+   if (appState.param.sim.paraview)
+   {
+      appState.pd = new ParaViewDataCollection(appState.param.sim.basename, appState.pmesh.get());
+      appState.pd->RegisterField("Density",  &appState.rho0_gf);
+      appState.pd->RegisterField("Displacement", &appState.u_gf);
+      appState.pd->RegisterField("Velocity", &appState.v_gf);
+      appState.pd->RegisterField("Specific Internal Energy", &appState.e_gf);
+      appState.pd->RegisterField("Stress", &appState.s_gf);
+      appState.pd->RegisterField("Plastic Strain", &appState.p_gf);
+      appState.pd->RegisterField("inital Plastic Strain", &appState.ini_p_gf);
+      appState.pd->RegisterField("Non-inital Plastic Strain", &appState.n_p_gf);
+      // Geometric parameters would need to be added to AppState if used
+      // appState.pd->RegisterField("Geometric Parameters", &quality);
+      appState.pd->RegisterField("Composition", &appState.comp_gf);
+      appState.pd->RegisterField("Lambda", &appState.lambda0_gf);
+      appState.pd->RegisterField("Mu", &appState.mu0_gf);
+      appState.pd->SetLevelsOfDetail(appState.param.mesh.order_v);
+      appState.pd->SetDataFormat(VTKFormat::BINARY);
+      appState.pd->SetHighOrderOutput(true);
+      appState.pd->SetCycle(0);
+      appState.pd->SetTime(0.0);
+      appState.pd->Save();
+   }
 
-    // Initialize the time integrator.
-    appState.ode_solver->Init(*appState.geo);
-    appState.geo->ResetTimeStepEstimate();
-    appState.dt = appState.geo->GetTimeStepEstimate(appState.S);
+   // Initialize the time integrator.
+   appState.ode_solver->Init(*appState.geo);
+   appState.geo->ResetTimeStepEstimate();
+   appState.dt = appState.geo->GetTimeStepEstimate(appState.S);
 
-    // Initialize submesh ODE solvers
-    appState.ode_solver_sub->Init(*appState.oper_sub);
-    appState.ode_solver_sub2->Init(*appState.oper_sub2);
+   // Initialize submesh ODE solvers
+   appState.ode_solver_sub->Init(*appState.oper_sub);
+   appState.ode_solver_sub2->Init(*appState.oper_sub2);
 
-    if (Mpi::Root())
-    {
-       std::cout<<""<<std::endl;
-       std::cout<<"simulation starts"<<std::endl;
-    }
+   if (Mpi::Root())
+   {
+      std::cout<<""<<std::endl;
+      std::cout<<"simulation starts"<<std::endl;
+   }
 }
 
 
@@ -1022,6 +1023,7 @@ void run(AppState& appState)
          appState.last_step = true;
       }
       if (appState.steps == appState.param.sim.max_tsteps) { appState.last_step = true; }
+
       S_old = appState.S;
       t_old = appState.t;
       double year = appState.t/86400/365.25;
@@ -1140,36 +1142,39 @@ void run(AppState& appState)
          appState.geo->TMOPUpdate(appState.S, false);
       }
 
-      if (appState.last_step || (ti % appState.param.sim.vis_steps) == 0)
+      // Print progress.
+      const bool print_progress_now = (ti % appState.param.sim.vis_steps == 0) || appState.last_step;
+      if (print_progress_now)
       {
-          if (Mpi::Root()) {
-              cout << "step " << std::setw(5) << ti
-                   << ",\tt = " << std::setw(5) << std::setprecision(4) << appState.t
-                   << endl;
-          }
-          if (appState.visit_dc)
-          {
-             appState.visit_dc->SetCycle(ti);
-             appState.visit_dc->SetTime(appState.t);
-             if(appState.param.sim.year){appState.visit_dc->SetTime(year);}
-             appState.visit_dc->Save();
-          }
-          if (appState.pd)
-          {
-             appState.pd->SetCycle(ti);
-             appState.pd->SetTime(appState.t);
-             if(appState.param.sim.year){appState.pd->SetTime(year);}
-             appState.pd->Save();
-          }
+         print_progress(ti, appState);
       }
 
-      if (appState.param.sim.check)
+      // Save data at every vis_steps or at the last time step.
+      // save data when printing progress for now. save_steps and print_steps will be separated in the future.
+      const bool save_data_now = print_progress_now;
+      if (save_data_now)
       {
-         double lnorm = appState.e_gf * appState.e_gf, norm;
-         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, appState.pmesh->GetComm());
-         const double e_norm = sqrt(norm);
-         Checks(ti, e_norm, appState.checks);
+         if (Mpi::Root()) { cout << "Saving data ..." << endl; }
+         if (appState.param.sim.paraview)
+         {
+            appState.pd->SetCycle(ti);
+            appState.pd->SetTime(appState.t);
+            appState.pd->Save();
+         }
+         if (appState.param.sim.visit)
+         {
+            appState.visit_dc->SetCycle(ti);
+            appState.visit_dc->SetTime(appState.t);
+            appState.visit_dc->Save();
+         }
       }
+   }
+   if (Mpi::Root())
+   {
+      cout << "Simulation finished." << endl;
+      cout << "Total time steps: " << appState.steps << endl;
+      cout << "Final time: " << appState.t << endl;
+      cout << "Final dt: " << appState.dt << endl;
    }
 }
 
@@ -1464,7 +1469,7 @@ static void Checks(const int ti, const double nrm, int &chk)
    const double it_norms[2][8][2][2] = // dim, problem, {it,norm}
    {
       {
-         {{5, 6.546538624534384e+00}, { 27, 7.588576357792927e+00}},
+         {{5,  6.546538624534384e+00}, { 27, 7.588576357792927e+00}},
          {{5, 3.508254945225794e+00}, { 15, 2.756444596823211e+00}},
          {{5, 1.020745795651244e+01}, { 59, 1.721590205901898e+01}},
          {{5, 8.000000000000000e+00}, { 16, 8.000000000000000e+00}},
@@ -1476,7 +1481,7 @@ static void Checks(const int ti, const double nrm, int &chk)
       {
          {{5, 1.198510951452527e+03}, {188, 1.199384410059154e+03}},
          {{5, 1.339163718592566e+01}, { 28, 7.521073677397994e+00}},
-         {{5, 2.041491591302486e+01}, { 59, 3.443180411803796e+01}},
+         {{5, 2.041491591302486e+01}, {  59, 3.443180411803796e+01}},
          {{5, 1.600000000000000e+01}, { 16, 1.600000000000000e+01}},
          {{5, 6.892649884704898e+01}, { 18, 6.893688067534482e+01}},
          {{5, 2.061984481890964e+01}, { 36, 2.114519664792607e+01}},
@@ -1493,5 +1498,45 @@ static void Checks(const int ti, const double nrm, int &chk)
          const double norm = it_norms[dim-2][p][i][1];
          check(p, it, norm);
       }
+   }
+}
+
+void print_progress(const int ti, AppState &appState)
+{
+   // Get global maximum velocity
+   Vector vel_mag(appState.v_gf.Size()/dim);
+   int n = appState.v_gf.Size() / dim;
+   for (int i = 0; i < n; i++)
+   {
+      double vx = appState.v_gf(i);
+      double vy = appState.v_gf(i + n);
+      double vz = (dim == 3) ? appState.v_gf(i + 2 * n) : 0.0;
+      vel_mag[i] = std::sqrt(vx * vx + vy * vy + vz * vz);
+   }
+   double local_max_vel = vel_mag.Max();
+   double global_max_vel;
+   MPI_Reduce(&local_max_vel, &global_max_vel, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+   if (Mpi::Root())
+   {
+      double t = appState.t;
+      double dt = appState.dt;
+      std::string dt_unit = "sec";
+
+
+      if (appState.param.sim.year)
+      {
+         const double secs_per_year = 86400.0 * 365.25;
+         t /= secs_per_year;
+         dt /= secs_per_year;
+         dt_unit = "yr";
+      }
+
+      cout << std::fixed << std::setprecision(6) << std::scientific;
+      cout << "step " << std::setw(5) << ti
+           << ", t (" << dt_unit << ") = " << std::setw(5) << t
+           << ", dt (" << dt_unit << ") = " << std::setw(5) << dt
+           << ", max vel = " << std::setw(5) << global_max_vel;
+      cout << endl;
    }
 }
