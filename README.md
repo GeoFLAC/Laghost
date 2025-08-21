@@ -210,7 +210,6 @@ Clone and build the parallel version of MFEM:
 ~> git clone https://github.com/mfem/mfem.git ./mfem
 ~> cd mfem/
 ~/mfem> git checkout master
-~/mfem> cp ../Laghost/mfem_modification/vector* ./linalg/
 ~/mfem> make parallel -j MFEM_USE_GSLIB=YES
 ~/mfem> cd ..
 ```
@@ -220,7 +219,6 @@ Clone and build the cuda version of MFEM:
 ~> git clone https://github.com/mfem/mfem.git ./mfem
 ~> cd mfem/
 ~/mfem> git checkout master
-~/mfem> cp ../Laghost/mfem_modification/vector* ./linalg/
 ~/mfem> make pcuda -j MFEM_USE_GSLIB=YES
 ~/mfem> cd ..
 ```
@@ -252,182 +250,11 @@ download and building of hypre, METIS and MFEM. -->
 
 ## Versions
 
-In addition to the main MPI-based CPU implementation in https://github.com/CEED/Laghost,
-the following versions of Laghost have been developed
+The main MPI-based CPU implementation is the primary version of Laghost.
 
-<!-- - **SERIAL** version in the [serial/](./serial/README.md) directory.
-- **AMR** version in the [amr/](./amr/README.md) directory.
-  This version supports dynamic adaptive mesh refinement.
- -->
+<!-- Note: The serial/ and amr/ directories have been removed as they were obsolete -->
+
 ## Contact
 
 You can reach the Laghost team by emailing slee29@memphis.edu or sungho91123@gmail.com or by leaving a
 comment in the [issue tracker](https://github.com/CEED/Laghost/issues).
-
-<!-- ## Copyright
-
-The following copyright applies to each file in the CEED software suite,
-unless otherwise stated in the file:
-
-> Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at the
-> Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights reserved.
-
-See files LICENSE and NOTICE for details. -->
-
-
-## Running
-#### TBD
-
-<!-- #### Sedov blast
-
-The main problem of interest for Laghos is the Sedov blast wave (`-p 1`) with
-partial assembly option (`-pa`).
-
-Some sample runs in 2D and 3D respectively are:
-```sh
-mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa
-mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vis
-```
-
-The latter produces the following density plot (notice the `-vis` option)
-
-[![Sedov blast image](data/sedov.png)](https://glvis.org/live/?stream=../data/laghos.saved)
-
-#### Taylor-Green and Gresho vortices
-
-Laghos includes also smooth test problems that expose all the principal
-computational kernels of the problem except for the artificial viscosity
-evaluation. (Viscosity can still be activated for these problems with the
-`--impose-viscosity` option.)
-
-Some sample runs in 2D and 3D respectively are:
-```sh
-mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.5 -pa
-mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.25 -pa
-mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -vis -pa
-```
-
-The latter produce the following velocity magnitude plots (notice the `-vis` option)
-
-<table border="0">
-<td> <img src="data/tg.png">
-<td> <img src="data/gresho.png">
-</table>
-
-#### Triple-point problem
-
-This is a well known three-material problem that combines shock waves and
-vorticity, thus examining the complex computational abilities of Laghos.
-
-Some sample runs in 2D and 3D respectively are:
-```sh
-mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5.0 -pa
-mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 2 -tf 5.0 -vis -pa
-```
-
-The latter produces the following specific internal energy plot (notice the `-vis` option)
-
-<img src="data/tp.png" width="500" height="500">
-
-## Verification of Results
-
-To make sure the results are correct, we tabulate reference final iterations
-(`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
-
-1. `mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa`
-2. `mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa`
-3. `mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa`
-4. `mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa`
-5. `mpirun -np 8 ./laghos -p 2 -dim 1 -rs 5 -tf 0.2 -fa`
-6. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
-7. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa`
-8. `mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
-9. `mpirun -np 8 ./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -fa`
-
-| `run` | `step` | `dt` | `e` |
-| ----- | ------ | ---- | --- |
-|  1. |  339 | 0.000702 | 4.9695537349e+01 |
-|  2. | 1041 | 0.000121 | 3.3909635545e+03 |
-|  3. | 1154 | 0.001655 | 4.6303396053e+01 |
-|  4. |  560 | 0.002449 | 1.3408616722e+02 |
-|  5. |  413 | 0.000470 | 3.2012077410e+01 |
-|  6. | 2872 | 0.000064 | 5.6547039096e+01 |
-|  7. |  858 | 0.000474 | 5.6691500623e+01 |
-|  8. |  776 | 0.000045 | 4.0982431726e+02 |
-|  9. | 2462 | 0.000050 | 1.1792848684e+02 |
-
-Similar GPU runs using the MFEM CUDA *device* can be run as follows:
-
-1. `./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa -d cuda`
-2. `./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa -d cuda`
-3. `./laghos -p 1 -dim 2 -rs 3 -tf 0.80 -pa -d cuda`
-4. `./laghos -p 1 -dim 3 -rs 2 -tf 0.60 -pa -d cuda`
-5. `./laghos -p 2 -dim 1 -rs 5 -tf 0.20 -fa`
-6. `./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -d cuda`
-7. `./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa -cgt 1e-12 -d cuda`
-8. `./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -d cuda`
-
-An implementation is considered valid if the final energy values are all within
-round-off distance from the above reference values.
-
-## Performance Timing and FOM
-
-Each time step in Laghos contains 3 major distinct computations:
-
-1. The inversion of the global kinematic mass matrix (CG H1).
-2. The force operator evaluation from degrees of freedom to quadrature points (Forces).
-3. The physics kernel in quadrature points (UpdateQuadData).
-
-By default Laghos is instrumented to report the total execution times and rates,
-in terms of millions of degrees of freedom per second (megadofs), for each of
-these computational phases. (The time for inversion of the local thermodynamic
-mass matrices (CG L2) is also reported, but that takes a small part of the
-overall computation.)
-
-Laghos also reports the total rate for these major kernels, which is a proposed
-**Figure of Merit (FOM)** for benchmarking purposes.  Given a computational
-allocation, the FOM should be reported for different problem sizes and finite
-element orders.
-
-A sample run on the [Vulcan](https://computation.llnl.gov/computers/vulcan) BG/Q
-machine at LLNL is:
-
-```
-srun -n 294912 laghos -pa -p 1 -tf 0.6 -pt 911 -m data/cube_922_hex.mesh \
-                      --ode-solver 7 --max-steps 4
-                      --cg-tol 0 --cg-max-iter 50 -ok 3 -ot 2 -rs 5 -rp 2
-```
-This is Q3-Q2 3D computation on 294,912 MPI ranks (18,432 nodes) that produces
-rates of approximately 125419, 55588, and 12674 megadofs, and a total FOM of
-about 2064 megadofs.
-
-To make the above run 8 times bigger, one can either weak scale by using 8 times
-as many MPI tasks and increasing the number of serial refinements: `srun -n
-2359296 ... -rs 6 -rp 2`, or use the same number of MPI tasks but increase the
-local problem on each of them by doing more parallel refinements: `srun -n
-294912 ... -rs 5 -rp 3`.
-
-## Versions
-
-In addition to the main MPI-based CPU implementation in https://github.com/CEED/Laghos,
-the following versions of Laghos have been developed
-
-- **SERIAL** version in the [serial/](./serial/README.md) directory.
-- **AMR** version in the [amr/](./amr/README.md) directory.
-  This version supports dynamic adaptive mesh refinement.
-
-## Contact
-
-You can reach the Laghos team by emailing laghos@llnl.gov or by leaving a
-comment in the [issue tracker](https://github.com/CEED/Laghos/issues).
-
-## Copyright
-
-The following copyright applies to each file in the CEED software suite,
-unless otherwise stated in the file:
-
-> Copyright (c) 2017, Lawrence Livermore National Security, LLC. Produced at the
-> Lawrence Livermore National Laboratory. LLNL-CODE-734707. All Rights reserved.
-
-See files LICENSE and NOTICE for details.
- -->

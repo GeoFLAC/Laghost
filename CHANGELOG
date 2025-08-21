@@ -51,7 +51,7 @@ Version 2.0, released on Nov 19, 2018
 
 - Added an OCCA version of Laghos in the occa/ directory.
 
-- Added an AMR (adaptive mesh refinement) version in the amr/ directory.
+- Added an AMR (adaptive mesh refinement) version in the amr/ directory. [REMOVED: obsolete directory deleted]
 
 - Replaced a viscosity "if statement" with a smooth step function.
 

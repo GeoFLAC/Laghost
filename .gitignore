@@ -1,1 +1,60 @@
-.vscode
+# Compiled object files
+*.o
+*.obj
+
+# Executable files
+laghost
+*/laghost
+
+# Results and output directories
+results/
+output/
+*.out
+
+# Build artifacts
+*.a
+*.so
+*.dylib
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.#*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Log files
+*.log
+
+# ParaView/VTK output files
+*.pvtu
+*.vtu
+*.pvd
+*.visit
+
+# Backup files
+*.backup
+*.bak
+
+# Dependencies
+*.d
+
+# CMake generated files (if we add CMake support later)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.cmake
