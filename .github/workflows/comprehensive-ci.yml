@@ -41,7 +41,7 @@ jobs:
     
     - name: Cache MFEM and dependencies  
       id: cache-mfem
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ../hypre-2.28.0
@@ -158,7 +158,7 @@ jobs:
     
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: test-results
         path: |
