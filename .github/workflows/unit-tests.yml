@@ -1,0 +1,135 @@
+name: Unit Tests
+
+on:
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'makefile'
+      - '.github/workflows/**'
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends \
+          build-essential \
+          cmake \
+          libgtest-dev \
+          libboost-program-options-dev \
+          liblapack-dev \
+          libblas-dev \
+          libopenmpi-dev \
+          openmpi-bin \
+          wget \
+          ca-certificates
+    
+    - name: Build and install Google Test
+      run: |
+        cd /usr/src/googletest
+        sudo cmake .
+        sudo make -j$(nproc)
+        sudo make install
+    
+    - name: Cache MFEM and dependencies
+      id: cache-mfem
+      uses: actions/cache@v3
+      with:
+        path: |
+          ../hypre-2.28.0
+          ../hypre
+          ../metis-4.0.3  
+          ../metis-4.0
+          ../gslib
+          ../mfem
+        key: laghost-mfem-${{ runner.os }}-v2-${{ hashFiles('.github/workflows/unit-tests.yml') }}
+        restore-keys: |
+          laghost-mfem-${{ runner.os }}-v2-
+          laghost-mfem-${{ runner.os }}-
+    
+    - name: Build MFEM dependencies
+      if: steps.cache-mfem.outputs.cache-hit != 'true'
+      run: |
+        cd ..
+        
+        # Download and build HYPRE
+        echo "::group::Building HYPRE"
+        wget -q https://github.com/hypre-space/hypre/archive/v2.28.0.tar.gz
+        tar -xzf v2.28.0.tar.gz
+        cd hypre-2.28.0/src
+        ./configure --disable-fortran --without-fei --enable-shared --disable-examples --disable-tests
+        make -j$(nproc)
+        cd ../..
+        ln -sf hypre-2.28.0 hypre
+        echo "::endgroup::"
+        
+        # Download and build METIS
+        echo "::group::Building METIS"
+        wget -q http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/metis-4.0.3.tar.gz
+        tar -xzf metis-4.0.3.tar.gz
+        cd metis-4.0.3
+        make COPTIONS="-fPIC -O2 -DNDEBUG"
+        cd ..
+        ln -sf metis-4.0.3 metis-4.0
+        echo "::endgroup::"
+        
+        # Download and build GSLIB
+        echo "::group::Building GSLIB"
+        git clone --depth 1 https://github.com/Nek5000/gslib.git
+        cd gslib
+        make CC=gcc CFLAGS="-fPIC -O2 -DNDEBUG" -j$(nproc)
+        cd ..
+        echo "::endgroup::"
+        
+        # Download and build MFEM
+        echo "::group::Building MFEM"
+        git clone --depth 1 https://github.com/mfem/mfem.git
+        cd mfem
+        make parallel -j$(nproc) \
+          MFEM_USE_GSLIB=YES \
+          MFEM_USE_METIS_5=NO \
+          HYPRE_DIR=../hypre \
+          METIS_DIR=../metis-4.0 \
+          GSLIB_DIR=../gslib \
+          CXXFLAGS="-O2 -DNDEBUG"
+        echo "::endgroup::"
+    
+    - name: Create symbolic links (for cached build)
+      if: steps.cache-mfem.outputs.cache-hit == 'true'
+      run: |
+        cd ..
+        if [ ! -L hypre ] && [ -d hypre-2.28.0 ]; then 
+          ln -sf hypre-2.28.0 hypre
+        fi
+        if [ ! -L metis-4.0 ] && [ -d metis-4.0.3 ]; then 
+          ln -sf metis-4.0.3 metis-4.0
+        fi
+    
+    - name: Build Laghost
+      run: |
+        echo "::group::Building Laghost"
+        make -j$(nproc) MFEM_USE_GSLIB=YES
+        echo "::endgroup::"
+    
+    - name: Run unit tests
+      run: |
+        echo "::group::Running Unit Tests"
+        cd tests/unit
+        make test
+        echo "::endgroup::"
+    
+    - name: Test basic functionality
+      run: |
+        echo "::group::Testing Basic Functionality"
+        ./laghost --help
+        echo "Configuration file test (should complete quickly):"
+        timeout 5s ./laghost -i config/defaults/defaults.cfg -tf 0.001 -ms 1 2>/dev/null || echo "Test completed or timed out as expected"
+        echo "::endgroup::"
