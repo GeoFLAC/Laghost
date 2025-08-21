@@ -55,11 +55,6 @@ jobs:
         cd ../..
         # Create proper directory structure for MFEM
         ln -sf hypre-2.28.0/src hypre
-        # MFEM expects headers in hypre/include, but they're in hypre/hypre/include
-        mkdir -p hypre/include
-        cp -r hypre-2.28.0/src/hypre/include/* hypre/include/
-        mkdir -p hypre/lib
-        cp hypre-2.28.0/src/hypre/lib/* hypre/lib/ 2>/dev/null || true
         # Build METIS
         echo "Building METIS..."
         wget -q https://github.com/mfem/tpls/raw/gh-pages/metis-4.0.3.tar.gz
@@ -75,6 +70,11 @@ jobs:
         make CC=mpicc CFLAGS="-fPIC -O2" -j2
         cd ..
         # Build MFEM
+        echo "=== Directory listing before MFEM build ==="
+        ls -la /home/runner/work/Laghost/
+        echo "=== Checking dependency symlinks ==="
+        ls -la hypre metis-4.0 gslib 2>/dev/null || echo "Some dependencies not found"
+        echo "==========================================="
         echo "Building MFEM..."
         git clone https://github.com/mfem/mfem.git
         cd mfem
@@ -89,12 +89,7 @@ jobs:
         cd ..
         # Ensure symlinks exist for cached dependencies
         if [ ! -L hypre ]; then # Create proper directory structure for MFEM
-        ln -sf hypre-2.28.0/src hypre
-        # MFEM expects headers in hypre/include, but they're in hypre/hypre/include
-        mkdir -p hypre/include
-        cp -r hypre-2.28.0/src/hypre/include/* hypre/include/
-        mkdir -p hypre/lib
-        cp hypre-2.28.0/src/hypre/lib/* hypre/lib/ 2>/dev/null || true; fi
+        ln -sf hypre-2.28.0/src hypre; fi
         if [ ! -L metis-4.0 ]; then ln -sf metis-4.0.3 metis-4.0; fi
     - name: Build Laghost
       run: |
@@ -174,6 +169,11 @@ jobs:
         make CC=mpicc CFLAGS="-fPIC -O2" -j2
         cd ..
         # Build MFEM
+        echo "=== Directory listing before MFEM build ==="
+        ls -la /home/runner/work/Laghost/
+        echo "=== Checking dependency symlinks ==="
+        ls -la hypre metis-4.0 gslib 2>/dev/null || echo "Some dependencies not found"
+        echo "==========================================="
         echo "Building MFEM..."
         git clone https://github.com/mfem/mfem.git
         cd mfem
