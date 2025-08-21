@@ -84,7 +84,7 @@ jobs:
         git clone https://github.com/mfem/mfem.git
         cd mfem
         echo "=== Directory listing from mfem directory ==="
-        pwd; ls -la ..
+        pwd; ls -la ..; ls ../hypre/src/hypre/include
         echo "============================================="
         echo "Building MFEM..."
         make parallel -j2 \
