@@ -171,7 +171,8 @@ From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
 - METIS (a family of multilevel partitioning algorithms)
   https://github.com/mfem/tpls
 
-  Note: We recommend our mirror of metis-4.0.3/5.1.0 above because the METIS
+  Note: We recommend using the MFEM third-party libraries mirror at 
+  https://github.com/mfem/tpls/raw/gh-pages/metis-4.0.3.tar.gz because the original METIS
   webpage, http://glaros.dtc.umn.edu/gkhome/metis/metis/overview, is often down
   and we don't support yet the new repo https://github.com/KarypisLab/METIS.
 

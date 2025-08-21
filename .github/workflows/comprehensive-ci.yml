@@ -70,7 +70,7 @@ jobs:
         echo "::endgroup::"
         
         echo "::group::Building METIS"
-        wget -q http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/metis-4.0.3.tar.gz
+        wget -q https://github.com/mfem/tpls/raw/gh-pages/metis-4.0.3.tar.gz
         tar -xzf metis-4.0.3.tar.gz
         cd metis-4.0.3
         make COPTIONS="-fPIC -O2"
