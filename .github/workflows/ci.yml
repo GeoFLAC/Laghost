@@ -72,8 +72,8 @@ jobs:
         echo "Downloading GSLIB..."
         git clone https://github.com/Nek5000/gslib.git
         cd gslib
-        echo "Building GSLIB..."
-        make CC=gcc CFLAGS="-fPIC -O2" -j2
+        echo "Building GSLIB with MPI support..."
+        make CC=mpicc CFLAGS="-fPIC -O2" -j2
         cd ..
     
     - name: Download and build MFEM

@@ -73,10 +73,10 @@ jobs:
         ln -sf metis-4.0.3 metis-4.0
         
         # Build GSLIB
-        echo "Building GSLIB..."
+        echo "Building GSLIB with MPI support..."
         git clone https://github.com/Nek5000/gslib.git
         cd gslib
-        make CC=gcc CFLAGS="-fPIC -O2" -j2
+        make CC=mpicc CFLAGS="-fPIC -O2" -j2
         cd ..
         
         # Build MFEM
@@ -180,10 +180,10 @@ jobs:
         ln -sf metis-4.0.3 metis-4.0
         
         # Build GSLIB
-        echo "Building GSLIB..."
+        echo "Building GSLIB with MPI support..."
         git clone https://github.com/Nek5000/gslib.git
         cd gslib
-        make CC=gcc CFLAGS="-fPIC -O2" -j2
+        make CC=mpicc CFLAGS="-fPIC -O2" -j2
         cd ..
         
         # Build MFEM

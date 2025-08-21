@@ -81,7 +81,7 @@ jobs:
         echo "::group::Building GSLIB"
         git clone --depth 1 https://github.com/Nek5000/gslib.git
         cd gslib
-        make CC=gcc CFLAGS="-fPIC -O2" -j$(nproc)
+        make CC=mpicc CFLAGS="-fPIC -O2" -j$(nproc)
         cd ..
         echo "::endgroup::"
         
