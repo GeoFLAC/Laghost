@@ -188,7 +188,7 @@ From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
   $ cd metis-4.0.3
   $ make OPTFLAGS=-Wno-error=implicit-function-declaration
   $ cd ../..
-  $ ln -s metis-4.0.3 metis-4.0
+  $ ln -s mfem-tpls/metis-4.0.3 metis-4.0
   ```
 - This build is optional but recommended.
 
@@ -255,7 +255,7 @@ $ ./b2 --with-program_options -q
 ```sh
 $ git clone https://github.com/GeoFLAC/Laghost.git
 $ ls
-Laghost  gslib-1.0.9  gslib  hypre  mfem  mfem-tpls
+Laghost  gslib-1.0.9  gslib  hypre  metis-4.0  mfem  mfem-tpls
 ```
 
 ### Build Laghost
