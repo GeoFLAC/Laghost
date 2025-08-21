@@ -19,7 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghost_assembly.hpp"
-#include "laghost_parameters.hpp"
+#include "io/laghost_parameters.hpp"
 
 #ifdef MFEM_USE_MPI
 
