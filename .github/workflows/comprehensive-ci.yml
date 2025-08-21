@@ -78,7 +78,7 @@ jobs:
         git clone --depth 1 https://github.com/mfem/mfem.git
         cd mfem
           echo "=== Directory listing from MFEM perspective ==="
-          ls -la
+          pwd; ls -la ..
           echo "================================================"
         make parallel -j$(nproc) \
           MFEM_USE_GSLIB=YES \

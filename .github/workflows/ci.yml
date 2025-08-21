@@ -84,7 +84,7 @@ jobs:
         git clone https://github.com/mfem/mfem.git
         cd mfem
         echo "=== Directory listing from mfem directory ==="
-        ls -la /home/runner/work/Laghost/
+        pwd; ls -la ..
         echo "============================================="
         echo "Building MFEM..."
         make parallel -j2 \
