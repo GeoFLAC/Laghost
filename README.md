@@ -176,7 +176,7 @@ From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
   webpage, http://glaros.dtc.umn.edu/gkhome/metis/metis/overview, is often down
   and we don't support yet the new repo https://github.com/KarypisLab/METIS.
 
-- Follow https://mfem.org/building/#parallel-build-using-metis-5
+- Follow https://mfem.org/building/#parallel-mpi-version-of-mfem
   ```sh
   $ ls
   hypre  mfem
@@ -184,11 +184,11 @@ From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
   $ ls
   hypre  mfem  mfem-tpls
   $ cd mfem-tpls
-  $ tar xzvf metis-5.1.0.tar.gz
-  $ cd metis-5.1.0
-  $ make BUILDDIR=lib config
-  $ make BUILDDIR=lib
-  $ cp lib/libmetis/libmetis.a lib
+  $ tar -zxvf metis-4.0.3.tar.gz
+  $ cd metis-4.0.3
+  $ make OPTFLAGS=-Wno-error=implicit-function-declaration
+  $ cd ../..
+  $ ln -s metis-4.0.3 metis-4.0
   ```
 - This build is optional but recommended.
 
@@ -203,20 +203,14 @@ From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
 >  clean; make CC=mpicc" or "make clean; make CC=gcc MPI=0". Build MFEM with
 >  MFEM_USE_GSLIB=YES.
   
-- URL: https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
-- Options: GSLIB_OPT, GSLIB_LIB.
-- Versions: GSLIB >= 1.0.9.
+- URL: https://github.com/Nek5000/gslib.git
 
 Follow the above instruction. The whole process might be as follows:
 
 ```sh
 $ ls
-hypre  mfem  mfem-tpls  
-$ wget https://github.com/gslib/gslib/archive/v1.0.9.tar.gz
-$ tar xzvf v1.0.9.tar.gz
-$ ln -s gslib-1.0.9 gslib
-$ ls
-gslib-1.0.9  gslib  hypre  mfem  mfem-tpls
+hypre  metis-4.0  mfem  mfem-tpls 
+$ git clone https://github.com/Nek5000/gslib.git
 $ cd gslib
 $ make CC=mpicc
 ```
@@ -227,15 +221,15 @@ Build the parallel version of MFEM:
 
 ```sh
 $ ls
-gslib-1.0.9  gslib  hypre  mfem  mfem-tpls
+gslib-1.0.9  gslib  hypre  metis-4.0  mfem  mfem-tpls
 $ cd mfem
-$ make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
+$ make parallel -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=NO
 ```
 
 To build the cuda version of MFEM:
 
 ```sh
-$ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=YES METIS_DIR=@MFEM_DIR@/../mfem-tpls/metis-5.1.0
+$ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=NO
 ```
 
 The above uses the `master` branch of MFEM.
