@@ -80,14 +80,12 @@ jobs:
     - name: Download and build MFEM
       run: |
         cd ..
-        echo "=== Directory listing before MFEM build ==="
-        ls -la /home/runner/work/Laghost/
-        echo "=== Checking dependency symlinks ==="
-        ls -la hypre metis-4.0 gslib 2>/dev/null || echo "Some dependencies not found"
-        echo "==========================================="
         echo "Downloading MFEM..."
         git clone https://github.com/mfem/mfem.git
         cd mfem
+        echo "=== Directory listing from mfem directory ==="
+        ls -la /home/runner/work/Laghost/
+        echo "============================================="
         echo "Building MFEM..."
         make parallel -j2 \
           MFEM_USE_GSLIB=YES \
