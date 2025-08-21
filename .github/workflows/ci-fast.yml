@@ -1,19 +1,15 @@
 name: Laghost CI - Fast
-
 on:
   push:
     branches: [ master, main ]
   pull_request:
     branches: [ master, main ]
-
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
     name: Unit Tests
-    
     steps:
     - uses: actions/checkout@v4
-    
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -27,14 +23,12 @@ jobs:
           libopenmpi-dev \
           openmpi-bin \
           wget
-    
     - name: Build Google Test
       run: |
         cd /usr/src/googletest
         sudo cmake .
         sudo make -j2
         sudo make install
-    
     - name: Cache dependencies
       id: cache-deps
       uses: actions/cache@v4
@@ -47,12 +41,10 @@ jobs:
         key: laghost-deps-${{ runner.os }}-v1
         restore-keys: |
           laghost-deps-${{ runner.os }}-
-    
     - name: Build dependencies
       if: steps.cache-deps.outputs.cache-hit != 'true'
       run: |
         cd ..
-        
         # Build HYPRE
         echo "Building HYPRE..."
         wget -q https://github.com/hypre-space/hypre/archive/v2.28.0.tar.gz
@@ -61,8 +53,13 @@ jobs:
         ./configure --disable-fortran --without-fei --enable-shared
         make -j2
         cd ../..
-        ln -sf hypre-2.28.0 hypre
-        
+        # Create proper directory structure for MFEM
+        ln -sf hypre-2.28.0/src hypre
+        # MFEM expects headers in hypre/include, but they're in hypre/hypre/include
+        mkdir -p hypre/include
+        cp -r hypre-2.28.0/src/hypre/include/* hypre/include/
+        mkdir -p hypre/lib
+        cp hypre-2.28.0/src/hypre/lib/* hypre/lib/ 2>/dev/null || true
         # Build METIS
         echo "Building METIS..."
         wget -q https://github.com/mfem/tpls/raw/gh-pages/metis-4.0.3.tar.gz
@@ -71,14 +68,12 @@ jobs:
         make COPTIONS="-fPIC -O2"
         cd ..
         ln -sf metis-4.0.3 metis-4.0
-        
         # Build GSLIB
         echo "Building GSLIB with MPI support..."
         git clone https://github.com/Nek5000/gslib.git
         cd gslib
         make CC=mpicc CFLAGS="-fPIC -O2" -j2
         cd ..
-        
         # Build MFEM
         echo "Building MFEM..."
         git clone https://github.com/mfem/mfem.git
@@ -86,41 +81,39 @@ jobs:
         make parallel -j2 \
           MFEM_USE_GSLIB=YES \
           MFEM_USE_METIS_5=NO \
-          HYPRE_DIR=../hypre \
           METIS_DIR=../metis-4.0 \
           GSLIB_DIR=../gslib
-    
     - name: Setup symbolic links (if cached)
       if: steps.cache-deps.outputs.cache-hit == 'true'
       run: |
         cd ..
         # Ensure symlinks exist for cached dependencies
-        if [ ! -L hypre ]; then ln -sf hypre-2.28.0 hypre; fi
+        if [ ! -L hypre ]; then # Create proper directory structure for MFEM
+        ln -sf hypre-2.28.0/src hypre
+        # MFEM expects headers in hypre/include, but they're in hypre/hypre/include
+        mkdir -p hypre/include
+        cp -r hypre-2.28.0/src/hypre/include/* hypre/include/
+        mkdir -p hypre/lib
+        cp hypre-2.28.0/src/hypre/lib/* hypre/lib/ 2>/dev/null || true; fi
         if [ ! -L metis-4.0 ]; then ln -sf metis-4.0.3 metis-4.0; fi
-    
     - name: Build Laghost
       run: |
         echo "Building Laghost..."
         make -j2 MFEM_USE_GSLIB=YES
-    
     - name: Run unit tests
       run: |
         echo "Running unit tests..."
         make unit-tests
-    
     - name: Test executable
       run: |
         echo "Testing laghost executable..."
         ./laghost --help
-
   integration-tests:
     runs-on: ubuntu-latest
     name: Integration Tests
     needs: unit-tests
-    
     steps:
     - uses: actions/checkout@v4
-    
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -134,14 +127,12 @@ jobs:
           libopenmpi-dev \
           openmpi-bin \
           wget
-    
     - name: Build Google Test
       run: |
         cd /usr/src/googletest
         sudo cmake .
         sudo make -j2
         sudo make install
-    
     - name: Cache dependencies
       id: cache-deps
       uses: actions/cache@v4
@@ -154,12 +145,10 @@ jobs:
         key: laghost-deps-${{ runner.os }}-v1
         restore-keys: |
           laghost-deps-${{ runner.os }}-
-    
     - name: Build dependencies
       if: steps.cache-deps.outputs.cache-hit != 'true'
       run: |
         cd ..
-        
         # Build HYPRE
         echo "Building HYPRE..."
         wget -q https://github.com/hypre-space/hypre/archive/v2.28.0.tar.gz
@@ -168,8 +157,13 @@ jobs:
         ./configure --disable-fortran --without-fei --enable-shared
         make -j2
         cd ../..
-        ln -sf hypre-2.28.0 hypre
-        
+        # Create proper directory structure for MFEM
+        ln -sf hypre-2.28.0/src hypre
+        # MFEM expects headers in hypre/include, but they're in hypre/hypre/include
+        mkdir -p hypre/include
+        cp -r hypre-2.28.0/src/hypre/include/* hypre/include/
+        mkdir -p hypre/lib
+        cp hypre-2.28.0/src/hypre/lib/* hypre/lib/ 2>/dev/null || true
         # Build METIS
         echo "Building METIS..."
         wget -q https://github.com/mfem/tpls/raw/gh-pages/metis-4.0.3.tar.gz
@@ -178,14 +172,12 @@ jobs:
         make COPTIONS="-fPIC -O2"
         cd ..
         ln -sf metis-4.0.3 metis-4.0
-        
         # Build GSLIB
         echo "Building GSLIB with MPI support..."
         git clone https://github.com/Nek5000/gslib.git
         cd gslib
         make CC=mpicc CFLAGS="-fPIC -O2" -j2
         cd ..
-        
         # Build MFEM
         echo "Building MFEM..."
         git clone https://github.com/mfem/mfem.git
@@ -193,28 +185,29 @@ jobs:
         make parallel -j2 \
           MFEM_USE_GSLIB=YES \
           MFEM_USE_METIS_5=NO \
-          HYPRE_DIR=../hypre \
           METIS_DIR=../metis-4.0 \
           GSLIB_DIR=../gslib
-    
     - name: Setup symbolic links (if cached)
       if: steps.cache-deps.outputs.cache-hit == 'true'
       run: |
         cd ..
         # Ensure symlinks exist for cached dependencies
-        if [ ! -L hypre ]; then ln -sf hypre-2.28.0 hypre; fi
+        if [ ! -L hypre ]; then # Create proper directory structure for MFEM
+        ln -sf hypre-2.28.0/src hypre
+        # MFEM expects headers in hypre/include, but they're in hypre/hypre/include
+        mkdir -p hypre/include
+        cp -r hypre-2.28.0/src/hypre/include/* hypre/include/
+        mkdir -p hypre/lib
+        cp hypre-2.28.0/src/hypre/lib/* hypre/lib/ 2>/dev/null || true; fi
         if [ ! -L metis-4.0 ]; then ln -sf metis-4.0.3 metis-4.0; fi
-    
     - name: Build Laghost
       run: |
         echo "Building Laghost..."
         make -j2 MFEM_USE_GSLIB=YES
-    
     - name: Run integration test
       run: |
         echo "Running integration test..."
         make test
-    
     - name: Test configuration parsing
       run: |
         echo "Testing configuration file parsing..."
