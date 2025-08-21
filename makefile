@@ -11,33 +11,58 @@ define LAGHOST_HELP_MSG
 
 Laghost makefile targets:
 
-   make
-   make setup
-   make setup MFEM_BUILD=pcuda
-   make status/info
-   make test
-   make tests
-   make checks
-   make install
-   make clean
-   make distclean
-   make style
+Build Targets:
+   make                 Build Laghost executable
+   make setup           Build third party libraries: HYPRE, METIS and MFEM
+   make setup MFEM_BUILD=pcuda   Build with CUDA support
+
+Testing Targets:
+   make test            Run single integration test (quick smoke test)
+   make tests           Run comprehensive integration test suite (7 scenarios)
+   make unit-tests      Run C++ unit tests (55 tests across 5 suites)
+   make test-all        Run all tests (integration + unit tests)
+   make test-build      Build unit tests without running them
+
+Validation Targets:
+   make checks          Run validation checks
+
+Utility Targets:
+   make status/info     Display current configuration information
+   make install         Install Laghost executable
+   make clean           Clean build artifacts
+   make distclean       Deep clean (includes third-party builds)
+   make style           Format code using astyle
 
 Examples:
 
+Build and Setup:
 make setup
    Build Laghost third party libraries: HYPRE, METIS and MFEM
 make -j 4
-   Build Laghost using the current configuration options from MFEM.
+   Build Laghost using 4 parallel jobs with current MFEM configuration
+make setup MFEM_BUILD=pcuda
+   Build dependencies with CUDA support
+
+Testing:
+make test
+   Quick integration test (~1-5 minutes) - single Laghost run for smoke testing
+make tests
+   Comprehensive integration tests (~10-30 minutes) - 7 different scenarios
+make unit-tests
+   Fast C++ unit tests (~1-3 minutes) - 55 tests covering core functionality
+make test-all
+   Complete test suite (~15-35 minutes) - all integration and unit tests
+
+Maintenance:
 make status
-   Display information about the current configuration.
+   Display information about the current configuration
 make install PREFIX=<dir>
-   Install the Laghost executable in <dir>.
+   Install the Laghost executable in <dir>
 make clean
-   Clean the Laghost executable, library and object files.
+   Clean the Laghost executable, library and object files
 make distclean
    In addition to "make clean", remove the local installation directory and some
-   run-time generated files.
+   run-time generated files
 
 endef
 
