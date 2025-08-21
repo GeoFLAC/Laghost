@@ -7,15 +7,21 @@
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
-#include "laghost_parameters.hpp"
 #include "laghost_input.hpp"
+#include "laghost_parameters.hpp"
+
+using namespace mfem;
 
 std::map<std::string, int> bc_unit_map = {
+    {"m/s", 0},
     {"cm/yr", 1},
     {"mm/yr", 2},
     {"cm/s", 3}
 };
 
+// Forward declaration of validate_parameters
+static void validate_parameters(const po::variables_map &vm, Param &p);
+                        
 // overarching function handling input parameters to be called during the main sequence.
 void read_and_assign_input_parameters(OptionsParser& args, Param& param, const int &myid)
 {
@@ -189,23 +195,6 @@ void read_and_assign_input_parameters(OptionsParser& args, Param& param, const i
         args.PrintOptions(std::cout);
     }
 
-    // Further determine some parameters based on the input.
-    param.bc.vel_unit = 1.0; // m/s to m/s. 
-    // See laghost_parameters.hpp for the mapping.
-    switch (bc_unit_map[param.bc.bc_unit]) {
-        case 1: // cm/yr to m/s. 
-            param.bc.vel_unit = 1.0e-2 / YEAR2SEC;
-            break;
-        case 2: // mm/yr to m/s
-            param.bc.vel_unit = 1.0e-3 / YEAR2SEC;
-            break;
-        case 3: // cm/s to m/s
-            param.bc.vel_unit = 1.0e-2;
-            break;
-        default: // already in m/s
-            break;
-    }
-
     param.tmop.mesh_poly_deg = param.mesh.order_v;
     param.tmop.quad_order = 2*param.mesh.order_v - 1; // integration order = 2p  - 1
 
@@ -292,6 +281,7 @@ static void declare_parameters(po::options_description &cfg,
         
         // ("control.flat_rate", po::value<double>(&p.control.flat_rate)->default_value(1.0e-7), " ")
         ("control.lithostatic", po::value<bool>(&p.control.lithostatic)->default_value(true)," ")
+        ("control.atmospheric", po::value<bool>(&p.control.atmospheric)->default_value(false)," ")
         ("control.init_dt", po::value<double>(&p.control.init_dt)->default_value(1.0), " ")
         ("control.mscale", po::value<double>(&p.control.mscale)->default_value(5.0e5), " ")
         ("control.gravity", po::value<double>(&p.control.gravity)->default_value(10.0), " ")
@@ -317,11 +307,108 @@ static void declare_parameters(po::options_description &cfg,
         ;
 
     cfg.add_options()
-        ("bc.bc_unit", po::value<std::string>(&p.bc.bc_unit)->default_value("cm/yr"),"Unit of Velocity")
-        ("bc.bc_ids", po::value<std::string>(&p.bc.bc_ids)->default_value("[0]"),"Boundary indicators '[d0, d1, d2, ...]")
-        ("bc.bc_vxs", po::value<std::string>(&p.bc.bc_vxs)->default_value("[0]"), "Boundary veloicty x '[d0, d1, d2, ...]")
-        ("bc.bc_vys", po::value<std::string>(&p.bc.bc_vys)->default_value("[0]"), "Boundary velocity y '[d0, d1, d2, ...]")
-        ("bc.bc_vzs", po::value<std::string>(&p.bc.bc_vzs)->default_value("[0]"), "Boundary velocity z '[d0, d1, d2, ...]")
+        ("bc.vbc_unit", po::value<std::string>(&p.bc.vbc_unit)->default_value("m/s"),
+         "Unit of velocity boundary condition")
+        ("bc.vbc_factor", po::value<double>(&p.bc.vbc_factor)->default_value(1.0),
+         "Factor to convert to vbc_unit to m/s.")
+    //  -- 2D --
+    //   ^ z (x1)
+    //   |     4 (z1, top)  Notation: bdy id for meshing (internal designation, geographic meaning)
+    //   +-----------------+
+    //   |                 |
+    // 1 | (x0, west)      | 2 (x1, east)
+    //   |                 |
+    //   +-----------------+--> x (x0)
+    //        3 (z0, bottom)
+    //  -- 3D --
+    //           ^ z (x1)
+    //           |
+    //           +-------------------------+
+    //         / |                        /|
+    //        /  |                       / |
+    //       /   |    4 (z1, top)       /  |
+    //      /    |                     /   |
+    //     /  1  |     5 (y0, north)  /    |
+    //    +----- |------------------+      |
+    //    | (x0, |__________________|__2___|___> x (x0)
+    //    | west)/                  | (x1, /
+    //    |     /                   |east)/
+    //    |    /     3 (z0, bottom) |    /
+    //    |   /                     |   /
+    //    |  /   6 (y1, south)      |  /
+    //    | /                       | /
+    //    |/                        |/
+    //    +--------- ---------------+
+    //   / y (x2)
+    //
+         ("bc.vbc_x0", po::value<int>(&p.bc.vbc_x0)->default_value(1),
+            "Type of velocity boundary condition for the left/western (x0) side. "
+            "Odd number indicates the normal component of the velocity is fixed. "
+            "Possible type is \n"
+            "0: all velocity components free;\n"
+            "1: normal component fixed, shear components free;\n"
+            "2: normal component free, shear components fixed at 0;\n"
+            "3: normal component fixed, shear components fixed at 0;\n"
+            "4: normal component free, shear component (not z) fixed, z component fixed at 0, only in 3D;\n"
+            "5: normal component fixed at 0, shear component (not z) fixed, z component fixed at 0, only in 3D;\n"
+            "7: normal component fixed, shear component (not z) fixed at 0, z component free, only in 3D;\n"
+            "11: horizontal normal component fixed, z component and horizontal shear component free, only in 3D;\n"
+            "13: horizontal normal component fixed, z component and horizontal shear component fixed at 0, only in 3D;\n")
+        ("bc.vbc_x1", po::value<int>(&p.bc.vbc_x1)->default_value(1),
+            "Type of boundary condition for the right/eastern (x1) side")
+        // the following two are for the boundary-normal component of the velocity
+        ("bc.vbc_x0_val0", po::value<double>(&p.bc.vbc_x0_val0)->default_value(-1e-9),
+            "Value of x component of velocity boundary condition for the left (x0 or western) side.)")
+        ("bc.vbc_x1_val0", po::value<double>(&p.bc.vbc_x1_val0)->default_value(-1e-9),
+            "Value of x component of velocity boundary condition for the right (x1 or eastern) side.)")
+        // the rest are used for setting tangential components of the velocity
+        ("bc.vbc_x0_val1", po::value<double>(&p.bc.vbc_x0_val1)->default_value(-1e-9),
+            "Value of z (vertical) component of velocity boundary condition for the left (x0 or western) side.)")
+        ("bc.vbc_x0_val2", po::value<double>(&p.bc.vbc_x0_val2)->default_value(-1e-9),
+            "Value of y (the 2nd horizontal) component of velocity boundary condition for the left (x0 or western) side.)")
+        ("bc.vbc_x1_val1", po::value<double>(&p.bc.vbc_x1_val1)->default_value(-1e-9),
+            "Value of z (vertical) component of velocity boundary condition for the right (x1 or eastern) side.)")
+        ("bc.vbc_x1_val2", po::value<double>(&p.bc.vbc_x1_val2)->default_value(-1e-9),
+            "Value of y (the 2nd horizontal) component of velocity boundary condition for the right (x1 or eastern) side.)")
+        
+        ("bc.vbc_z0", po::value<int>(&p.bc.vbc_z0)->default_value(0),
+            "Type of boundary condition for the bottom (z0) side")
+        ("bc.vbc_z1", po::value<int>(&p.bc.vbc_z1)->default_value(0),
+            "Type of boundary condition for the top (z1) side")
+        // the following two are for the boundary-normal component of the velocity
+        ("bc.vbc_z0_val1", po::value<double>(&p.bc.vbc_z0_val1)->default_value(0.0),
+            "Value of z (vertical) component of velocity boundary condition for the bottom (z0) side.)")
+        ("bc.vbc_z1_val1", po::value<double>(&p.bc.vbc_z1_val1)->default_value(0.0),
+            "Value of z (vertical) component of velocity boundary condition for the top (z1) side.)")
+        // the rest are used for setting tangential components of the velocity            
+        ("bc.vbc_z0_val0", po::value<double>(&p.bc.vbc_z0_val2)->default_value(0.0),
+            "Value of x component of velocity boundary condition for the bottom (z0) side.)")
+        ("bc.vbc_z0_val2", po::value<double>(&p.bc.vbc_z0_val2)->default_value(0.0),
+            "Value of y (the 2nd horizontal) component of velocity boundary condition for the bottom (z0) side.)")
+        ("bc.vbc_z1_val0", po::value<double>(&p.bc.vbc_z1_val1)->default_value(0.0),
+            "Value of x component of velocity boundary condition for the top (z1) side.)")
+        ("bc.vbc_z1_val2", po::value<double>(&p.bc.vbc_z1_val2)->default_value(0.0),
+            "Value of y (the 2nd horizontal) component of velocity boundary condition for the top (z1) side.)")
+
+        ("bc.vbc_y0", po::value<int>(&p.bc.vbc_y0)->default_value(0),
+            "Type of boundary condition for the northern (y0) side")
+        ("bc.vbc_y1", po::value<int>(&p.bc.vbc_y1)->default_value(0),
+            "Type of boundary condition for the southern (y1) side")
+          // the following two are for the boundary-normal component of the velocity
+        ("bc.vbc_y0_val2", po::value<double>(&p.bc.vbc_y0_val2)->default_value(0.0),
+            "Value of y (the 2nd horizontal) component of velocity boundary condition for the northern (y0) side.)")
+        ("bc.vbc_y1_val2", po::value<double>(&p.bc.vbc_y1_val2)->default_value(0.0),
+            "Value of y (the 2nd horizontal) component of velocity boundary condition for the southern (y1) side.)")
+        // the rest are used for setting tangential components of the velocity            
+        ("bc.vbc_y0_val0", po::value<double>(&p.bc.vbc_y0_val0)->default_value(0.0),
+            "Value of x component of velocity boundary condition for the northern (y0) side.)")
+        ("bc.vbc_y0_val1", po::value<double>(&p.bc.vbc_y0_val1)->default_value(0.0),
+            "Value of z (vertical) component of velocity boundary condition for the northern (y0) side.)")
+        ("bc.vbc_y1_val0", po::value<double>(&p.bc.vbc_y1_val0)->default_value(0.0),
+            "Value of x component of velocity boundary condition for the southern (y1) side.)")
+        ("bc.vbc_y1_val1", po::value<double>(&p.bc.vbc_y1_val1)->default_value(0.0),
+            "Value of z (vertical) component of velocity boundary condition for the southern (y1) side.)")
+
         ("bc.winkler_foundation", po::value<bool>(&p.bc.winkler_foundation)->default_value(false)," ")
         ("bc.winkler_flat", po::value<bool>(&p.bc.winkler_flat)->default_value(false)," ")
         ("bc.winkler_rho", po::value<double>(&p.bc.winkler_rho)->default_value(2700.0), " ")
@@ -336,19 +423,20 @@ static void declare_parameters(po::options_description &cfg,
     cfg.add_options()
         ("mat.plastic", po::value<bool>(&p.mat.plastic)->default_value(true), " ")
         ("mat.viscoplastic", po::value<bool>(&p.mat.viscoplastic)->default_value(false), " ")
-        ("mat.rho", po::value<std::string>(&p.mat.rho)->default_value("[2700.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.lambda", po::value<std::string>(&p.mat.lambda)->default_value("[3e10]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.mu", po::value<std::string>(&p.mat.mu)->default_value("[3e10]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.tension_cutoff", po::value<std::string>(&p.mat.tension_cutoff)->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.cohesion0", po::value<std::string>(&p.mat.cohesion0)->default_value("[44.0e6]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.cohesion1", po::value<std::string>(&p.mat.cohesion1)->default_value("[44.0e6]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.friction_angle0", po::value<std::string>(&p.mat.friction_angle0)->default_value("[30.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.friction_angle1", po::value<std::string>(&p.mat.friction_angle1)->default_value("[30.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.dilation_angle0", po::value<std::string>(&p.mat.dilation_angle0)->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.dilation_angle1", po::value<std::string>(&p.mat.dilation_angle1)->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.pls0", po::value<std::string>(&p.mat.pls0)->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.pls1", po::value<std::string>(&p.mat.pls1)->default_value("[0.5]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.plastic_viscosity", po::value<std::string>(&p.mat.plastic_viscosity)->default_value("[1.0]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.nmat", po::value<int>(&p.mat.nmat)->default_value(1),"Number of material types.")
+        ("mat.rho", po::value<std::string>()->default_value("[2700.0]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.lambda", po::value<std::string>()->default_value("[3e10]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.mu", po::value<std::string>()->default_value("[3e10]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.tension_cutoff", po::value<std::string>()->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.cohesion0", po::value<std::string>()->default_value("[44.0e6]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.cohesion1", po::value<std::string>()->default_value("[44.0e6]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.friction_angle0", po::value<std::string>()->default_value("[30.0]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.friction_angle1", po::value<std::string>()->default_value("[30.0]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.dilation_angle0", po::value<std::string>()->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.dilation_angle1", po::value<std::string>()->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.pls0", po::value<std::string>()->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.pls1", po::value<std::string>()->default_value("[0.5]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.plastic_viscosity", po::value<std::string>()->default_value("[1.0e+300]"),"Material indicators '[d0, d1, d2, ...]")
         ("mat.weak_rad", po::value<double>(&p.mat.weak_rad)->default_value(1.0e3), "circular weakzone")//
         ("mat.weak_x", po::value<double>(&p.mat.weak_x)->default_value(50.0e3), " x coord of circular")//
         ("mat.weak_y", po::value<double>(&p.mat.weak_y)->default_value(2.0e3), "y coord of circular")  //
@@ -427,12 +515,9 @@ static void get_input_parameters(const char* filename, Param& p)
         std::exit(0);
     }
     read_parameters_from_file(filename, cfg, vm);
-    // validate_parameters(vm, p);
+    validate_parameters(vm, p);
 }
 
-
-
-#if 0
 template<class T>
 static int read_numbers(const std::string &input, std::vector<T> &vec, int len)
 {
@@ -471,8 +556,10 @@ static int read_numbers(const std::string &input, std::vector<T> &vec, int len)
 }
 
 template<class T>
-static void get_numbers(const po::variables_map &vm, const char *name,
-                        std::vector<T> &values, int len, int optional_size=0)
+static void get_numbers(const po::variables_map &vm, 
+                        const char *name,
+                        std::vector<T> &values, 
+                        int len, int optional_size=0)
 {
     if ( ! vm.count(name) ) {
         std::cerr << "Error: " << name << " is not provided.\n";
@@ -486,9 +573,22 @@ static void get_numbers(const po::variables_map &vm, const char *name,
     }
 
     if (err) {
-        std::cerr << "Error: incorrect format for " << name << ",\n"
+        std::cerr << __FILE__ << ":" << __LINE__ << ": "
+                  << "Error: incorrect format for " << name << ",\n"
                   << "       must be '[d0, d1, d2, ...]'\n";
         std::exit(1);
+    }
+}
+
+template<class T>
+static void get_numbers(const po::variables_map &vm, const char *name,
+                        Vector &values, int len, int optional_size=0)
+{
+    std::vector<T> temp_values;
+    get_numbers(vm, name, temp_values, len, optional_size);
+    values.SetSize(temp_values.size());
+    for (long unsigned int i = 0; i < temp_values.size(); ++i) {
+        values[i] = temp_values[i];
     }
 }
 
@@ -497,261 +597,45 @@ static void validate_parameters(const po::variables_map &vm, Param &p)
     std::cout << "Checking consistency of input parameters...\n";
 
     //
-    // stopping condition and output interval are based on either model time or step
-    //
-    if ( ! (vm.count("sim.max_steps") || vm.count("sim.max_time_in_yr")) ) {
-        std::cerr << "Must provide either sim.max_steps or sim.max_time_in_yr\n";
-        std::exit(1);
-    }
-    if ( ! vm.count("sim.max_steps") )
-        p.sim.max_steps = std::numeric_limits<int>::max();
-    if ( ! vm.count("sim.max_time_in_yr") )
-        p.sim.max_time_in_yr = std::numeric_limits<double>::max();
-
-    if ( ! (vm.count("sim.output_step_interval") || vm.count("sim.output_time_interval_in_yr")) ) {
-        std::cerr << "Must provide either sim.output_step_interval or sim.output_time_interval_in_yr\n";
-        std::exit(1);
-    }
-    if ( ! vm.count("sim.output_step_interval") )
-        p.sim.output_step_interval = std::numeric_limits<int>::max();
-    if ( ! vm.count("sim.output_time_interval_in_yr") )
-        p.sim.output_time_interval_in_yr = std::numeric_limits<double>::max();
-
-    //
-    // These parameters are required when restarting
-    //
-    if (p.sim.is_restarting) {
-        if ( ! vm.count("sim.restarting_from_modelname") ) {
-            std::cerr << "Must provide sim.restarting_from_modelname when restarting.\n";
-            std::exit(1);
-        }
-        if ( ! vm.count("sim.restarting_from_frame") ) {
-            std::cerr << "Must provide sim.restarting_from_frame when restarting.\n";
-            std::exit(1);
-        }
-    }
-
-    //
-    // these parameters are required in mesh.meshing_option == 2
-    //
-    if (p.mesh.meshing_option == 2) {
-        if ( ! vm.count("mesh.refined_zonex") ||
-#ifdef THREED
-             ! vm.count("mesh.refined_zoney") ||
-#endif
-             ! vm.count("mesh.refined_zonez") ) {
-        std::cerr << "Must provide mesh.refined_zonex, "
-#ifdef THREED
-                  << "mesh.refined_zoney, "
-#endif
-                  << "mesh.refined_zonez.\n";
-        std::exit(1);
-        }
-
-        /* get 2 numbers from the string */
-        double_vec tmp;
-        int err;
-        std::string str;
-        str = vm["mesh.refined_zonex"].as<std::string>();
-        err = read_numbers(str, tmp, 2);
-        if (err || tmp[0] < 0 || tmp[1] > 1 || tmp[0] > tmp[1]) {
-            std::cerr << "Error: incorrect value for mesh.refine_zonex,\n"
-                      << "       must in this format '[d0, d1]', 0 <= d0 <= d1 <= 1.\n";
-            std::exit(1);
-        }
-        p.mesh.refined_zonex.first = tmp[0];
-        p.mesh.refined_zonex.second = tmp[1];
-#ifdef THREED
-        str = vm["mesh.refined_zoney"].as<std::string>();
-        err = read_numbers(str, tmp, 2);
-        if (err || tmp[0] < 0 || tmp[1] > 1 || tmp[0] > tmp[1]) {
-            std::cerr << "Error: incorrect value for mesh.refine_zoney,\n"
-                      << "       must in this format '[d0, d1]', 0 <= d0 <= d1 <= 1.\n";
-            std::exit(1);
-        }
-        p.mesh.refined_zoney.first = tmp[0];
-        p.mesh.refined_zoney.second = tmp[1];
-#endif
-        str = vm["mesh.refined_zonez"].as<std::string>();
-        err = read_numbers(str, tmp, 2);
-        if (err || tmp[0] < 0 || tmp[1] > 1 || tmp[0] > tmp[1]) {
-            std::cerr << "Error: incorrect value for mesh.refine_zonez,\n"
-                      << "       must in this format '[d0, d1]', 0 <= d0 <= d1 <= 1.\n";
-            std::exit(1);
-        }
-        p.mesh.refined_zonez.first = tmp[0];
-        p.mesh.refined_zonez.second = tmp[1];
-    }
-
-    if (p.mesh.smallest_size > p.mesh.largest_size) {
-        std::cerr << "Error: mesh.smallest_size is greater than mesh.largest_size.\n";
-        std::exit(1);
-    }
-
-#ifdef THREED
-    if (p.mesh.remeshing_option == 2) {
-        std::cerr << "Error: mesh.remeshing_option=2 is not available in 3D.\n";
-        std::exit(1);
-    }
-#endif
-
-    //
     // bc
     //
-    {
-        if ( p.bc.has_winkler_foundation && p.control.gravity == 0 ) {
-            p.bc.has_winkler_foundation = 0;
-            std::cerr << "Warning: no gravity, Winkler foundation is turned off.\n";
-        }
-        if ( p.bc.has_winkler_foundation && p.bc.vbc_z0 != 0 ) {
-            p.bc.vbc_z0 = 0;
-            std::cerr << "Warning: Winkler foundation is turned on, setting bc.vbc_z0 to 0.\n";
-        }
-        if ( p.bc.has_water_loading && p.control.gravity == 0 ) {
-            p.bc.has_water_loading = 0;
-            std::cerr << "Warning: no gravity, water loading is turned off.\n";
-        }
-        if ( p.bc.has_water_loading && p.bc.vbc_z1 != 0 ) {
-            p.bc.vbc_z1 = 0;
-            std::cerr << "Warning: water loading is turned on, setting bc.vbc_z1 to 0.\n";
-        }
-
-        if ( p.bc.vbc_z0 > 3) {
-            std::cerr << "Error: bc.vbc_z0 is not 0, 1, 2, or 3.\n";
-            std::exit(1);
-        }
-        if ( p.bc.vbc_z1 > 3) {
-            std::cerr << "Error: bc.vbc_z0 is not 0, 1, 2, or 3.\n";
-            std::exit(1);
-        }
-        if ( p.bc.vbc_n0 != 1 && p.bc.vbc_n0 != 3 && p.bc.vbc_n0 != 11 && p.bc.vbc_n0 != 13 ) {
-            std::cerr << "Error: bc.vbc_n0 is not 1, 3, 11, or 13.\n";
-            std::exit(1);
-        }
-        if ( p.bc.vbc_n1 != 1 && p.bc.vbc_n1 != 3 && p.bc.vbc_n1 != 11 && p.bc.vbc_n1 != 13 ) {
-            std::cerr << "Error: bc.vbc_n1 is not 1, 3, 11, or 13.\n";
-            std::exit(1);
-        }
-        if ( p.bc.vbc_n2 != 1 && p.bc.vbc_n2 != 3 && p.bc.vbc_n2 != 11 && p.bc.vbc_n2 != 13 ) {
-            std::cerr << "Error: bc.vbc_n2 is not 1, 3, 11, or 13.\n";
-            std::exit(1);
-        }
-        if ( p.bc.vbc_n3 != 1 && p.bc.vbc_n3 != 3 && p.bc.vbc_n3 != 11 && p.bc.vbc_n3 != 13 ) {
-            std::cerr << "Error: bc.vbc_n3 is not 1, 3, 11, or 13.\n";
-            std::exit(1);
-        }
-    }
-
-    //
-    // control
-    //
-    {
-        if ( p.control.dt_fraction < 0 || p.control.dt_fraction > 1 ) {
-            std::cerr << "Error: control.dt_fraction must be between 0 and 1.\n";
-            std::exit(1);
-        }
-        if ( p.control.damping_factor < 0 || p.control.damping_factor > 1 ) {
-            std::cerr << "Error: control.damping_factor must be between 0 and 1.\n";
-            std::exit(1);
-        }
-
-    }
-
-    //
-    // ic
-    //
-    {
-        if ( p.ic.mattype_option == 1) {
-            get_numbers(vm, "ic.layer_mattypes", p.ic.layer_mattypes, p.ic.num_mattype_layers);
-            get_numbers(vm, "ic.mattype_layer_depths", p.ic.mattype_layer_depths, p.ic.num_mattype_layers-1);
-            // mattype_layer_depths must be already sorted
-            if (! std::is_sorted(p.ic.mattype_layer_depths.begin(), p.ic.mattype_layer_depths.end())) {
-                std::cerr << "Error: the content of ic.mattype_layer_depths is not ordered from"
-                    " small to big values.\n";
-                std::exit(1);
-            }
-        }
-    }
-
-    //
-    // marker
-    //
-    {
-
+    // Further determine some parameters based on the input.
+    // p.bc.vbc_factor = 1.0; // m/s to m/s. 
+    // See laghost_parameters.hpp for the mapping.
+    switch (bc_unit_map[p.bc.vbc_unit]) {
+        case 1: // cm/yr to m/s. 
+            p.bc.vbc_factor = 1.0e-2 / YEAR2SEC;
+            break;
+        case 2: // mm/yr to m/s
+            p.bc.vbc_factor = 1.0e-3 / YEAR2SEC;
+            break;
+        case 3: // cm/s to m/s
+            p.bc.vbc_factor = 1.0e-2;
+            break;
+        default: // already in m/s
+            break;
     }
 
     //
     // material properties
     //
     {
-        std::string str = vm["mat.rheology_type"].as<std::string>();
-        if (str == std::string("elastic"))
-            p.mat.rheol_type = MatProps::rh_elastic;
-        else if (str == std::string("viscous"))
-            p.mat.rheol_type = MatProps::rh_viscous;
-        else if (str == std::string("maxwell"))
-            p.mat.rheol_type = MatProps::rh_maxwell;
-        else if (str == std::string("elasto-plastic"))
-            p.mat.rheol_type = MatProps::rh_ep;
-        else if (str == std::string("elasto-visco-plastic"))
-            p.mat.rheol_type = MatProps::rh_evp;
-        else {
-            std::cerr << "Error: unknown rheology: '" << str << "'\n";
-            std::exit(1);
-        }
-
-#ifdef THREED
-        if ( p.mat.is_plane_strain ) {
-            p.mat.is_plane_strain = false;
-            std::cerr << "Warning: mat.is_plane_strain is not avaiable in 3D.\n";
-        }
-#endif
-
-        if (p.mat.phase_change_option != 0 && p.mat.nmat == 1) {
-            std::cerr << "Error: mat.phase_change_option is chosen, but mat.num_materials is 1.\n";
-            std::exit(1);
-        }
-        if (p.mat.phase_change_option == 1 && p.mat.nmat < 8) {
-            std::cerr << "Error: mat.phase_change_option is 1, but mat.num_materials is less than 8.\n";
-            std::exit(1);
-        }
-
         if (p.mat.nmat < 1) {
             std::cerr << "Error: mat.num_materials must be greater than 0.\n";
             std::exit(1);
         }
-
-        if (p.mat.nmat == 1 && p.control.ref_pressure_option != 0) {
-            p.control.ref_pressure_option = 0;
-            std::cerr << "Warning: mat.num_materials is 1, using simplest control.ref_pressure_option.\n";
-        }
-        if (p.mat.nmat == 1 && p.markers.replenishment_option != 1) {
-            p.markers.replenishment_option = 1;
-            std::cerr << "Warning: mat.num_materials is 1, using simplest markers.replenishment_option.\n";
-        }
-
-        get_numbers(vm, "mat.rho0", p.mat.rho0, p.mat.nmat, 1);
-        get_numbers(vm, "mat.alpha", p.mat.alpha, p.mat.nmat, 1);
-
-        get_numbers(vm, "mat.bulk_modulus", p.mat.bulk_modulus, p.mat.nmat, 1);
-        get_numbers(vm, "mat.shear_modulus", p.mat.shear_modulus, p.mat.nmat, 1);
-
-        get_numbers(vm, "mat.visc_exponent", p.mat.visc_exponent, p.mat.nmat, 1);
-        get_numbers(vm, "mat.visc_coefficient", p.mat.visc_coefficient, p.mat.nmat, 1);
-        get_numbers(vm, "mat.visc_activation_energy", p.mat.visc_activation_energy, p.mat.nmat, 1);
-
-        get_numbers(vm, "mat.heat_capacity", p.mat.heat_capacity, p.mat.nmat, 1);
-        get_numbers(vm, "mat.therm_cond", p.mat.therm_cond, p.mat.nmat, 1);
-
-        get_numbers(vm, "mat.pls0", p.mat.pls0, p.mat.nmat, 1);
-        get_numbers(vm, "mat.pls1", p.mat.pls1, p.mat.nmat, 1);
-        get_numbers(vm, "mat.cohesion0", p.mat.cohesion0, p.mat.nmat, 1);
-        get_numbers(vm, "mat.cohesion1", p.mat.cohesion1, p.mat.nmat, 1);
-        get_numbers(vm, "mat.friction_angle0", p.mat.friction_angle0, p.mat.nmat, 1);
-        get_numbers(vm, "mat.friction_angle1", p.mat.friction_angle1, p.mat.nmat, 1);
-        get_numbers(vm, "mat.dilation_angle0", p.mat.dilation_angle0, p.mat.nmat, 1);
-        get_numbers(vm, "mat.dilation_angle1", p.mat.dilation_angle1, p.mat.nmat, 1);
+        get_numbers<double>(vm, "mat.rho", p.mat.rho, p.mat.nmat);
+        get_numbers<double>(vm, "mat.lambda", p.mat.lambda, p.mat.nmat);
+        get_numbers<double>(vm, "mat.mu", p.mat.mu, p.mat.nmat);
+        get_numbers<double>(vm, "mat.tension_cutoff", p.mat.tension_cutoff, p.mat.nmat);
+        get_numbers<double>(vm, "mat.cohesion0", p.mat.cohesion0, p.mat.nmat);
+        get_numbers<double>(vm, "mat.cohesion1", p.mat.cohesion1, p.mat.nmat);
+        get_numbers<double>(vm, "mat.friction_angle0", p.mat.friction_angle0, p.mat.nmat);
+        get_numbers<double>(vm, "mat.friction_angle1", p.mat.friction_angle1, p.mat.nmat);
+        get_numbers<double>(vm, "mat.dilation_angle0", p.mat.dilation_angle0, p.mat.nmat);
+        get_numbers<double>(vm, "mat.dilation_angle1", p.mat.dilation_angle1, p.mat.nmat);
+        get_numbers<double>(vm, "mat.pls0", p.mat.pls0, p.mat.nmat);
+        get_numbers<double>(vm, "mat.pls1", p.mat.pls1, p.mat.nmat);
+        get_numbers<double>(vm, "mat.plastic_viscosity", p.mat.plastic_viscosity, p.mat.nmat);
     }
-
 }
-#endif

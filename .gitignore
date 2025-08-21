@@ -5,6 +5,7 @@
 # Executable files
 laghost
 */laghost
+./laghost
 
 # Results and output directories
 results/

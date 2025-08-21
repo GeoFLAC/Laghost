@@ -472,7 +472,7 @@ namespace mfem
             evol = msig/(lambda_c+mu_c);
             syy  = evol * lambda_c;
             esig(0,0) = s_gf.GetValue(T, ip, 1); esig(0,1) = 0.0; esig(0,2) = s_gf.GetValue(T, ip, 3); 
-            esig(1,0) =                     0,0; esig(1,1) = syy; esig(1,2) =                     0.0;
+            esig(1,0) =                     0.0; esig(1,1) = syy; esig(1,2) =                     0.0;
             esig(2,0) = s_gf.GetValue(T, ip, 3); esig(2,1) = 0.0; esig(2,2) = s_gf.GetValue(T, ip, 2);
 
             // Caushy stress at previous time step
@@ -480,7 +480,7 @@ namespace mfem
             evol = msig/(lambda_c+mu_c);
             syy  = evol * lambda_c;
             esig_old(0,0) = s_old_gf.GetValue(T, ip, 1); esig_old(0,1) = 0.0; esig_old(0,2) = s_old_gf.GetValue(T, ip, 3); 
-            esig_old(1,0) =                         0,0; esig_old(1,1) = syy; esig_old(1,2) =                         0.0;
+            esig_old(1,0) =                         0.0; esig_old(1,1) = syy; esig_old(1,2) =                         0.0;
             esig_old(2,0) = s_old_gf.GetValue(T, ip, 3); esig_old(2,1) = 0.0; esig_old(2,2) = s_old_gf.GetValue(T, ip, 2);
          }
          else
@@ -557,7 +557,7 @@ namespace mfem
          fh = sig3 - ten_cut + (sqrt(N_phi*N_phi + 1.0)+ N_phi)*(sig1 - N_phi*ten_cut + 2*coh_str*st_N_phi);
 
          depls = 0.0;
-         if((fs < 0 & fh < 0) | (ft > 0 & fh > 0))
+         if( ( (fs < 0) & (fh < 0) ) | ( (ft > 0) & (fh > 0) ) )
          { 
             if(fs < 0 & fh < 0) // stress correction at shear failure
             {

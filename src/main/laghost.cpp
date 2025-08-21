@@ -412,6 +412,199 @@ static void Collect_boundingbox_info( ParMesh *pmesh, Param &param, Vector &bb_c
    }
 }
 
+static void get_ess_dofs_for_component(ParFiniteElementSpace &H1FESpace, Array<int> &ess_bdr, int component, Array<int> &ess_tdofs, Array<int> &ess_vdofs, Array<int> &vdofs_list)
+{
+   // Temporary storage for essential dofs. 
+   // vdofs_list is given because it's used outside this function.
+   Array<int> dofs_marker, tdofs_list; 
+
+   H1FESpace.GetEssentialTrueDofs(ess_bdr, tdofs_list, component);
+   ess_tdofs.Append(tdofs_list);
+   H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, component);
+   FiniteElementSpace::MarkerToList(dofs_marker, vdofs_list);
+   ess_vdofs.Append(vdofs_list);
+}
+
+static void set_vbc_val(ParGridFunction &v_gf, Array<int> &vdofs_list, Param &param, double &max_vbc_val)
+{
+   double val = param.bc.vbc_x0_val0 * param.bc.vbc_factor;
+   for (int i = 0; i < vdofs_list.Size(); i++)
+      v_gf[vdofs_list[i]] = val;
+   
+   max_vbc_val = std::max(max_vbc_val, val);
+}
+
+static void unknown_bc_abort(ParMesh *pmesh, const int &myid, const char *bc_name, const char *bc_symb, const int &bc_attr)
+{
+   if (myid == 0)
+      cout << "Unknown BC type for the "<<bc_name<<" boundary "<<bc_symb<<" (attribute "<<bc_attr<<")" << endl;
+   delete pmesh;
+   MPI_Finalize();
+}
+
+static void set_essential_bc( const int myid, ParMesh *pmesh, ParFiniteElementSpace &H1FESpace, Param &param, Array<int> &ess_bdr, Array<int> &ess_tdofs, Array<int> &ess_vdofs, ParGridFunction &v_gf, double &max_vbc_val) 
+{
+   //
+   // MFEM assumes bdr_attribute is sequentially numbered from 1.
+   // And ess_bdr's (bdr_attribute-1)-th element should be non-zero to set the essential bc on that boundary.
+   // Example: Boundary attributes for 2D, 1 to 4, corresponding to internal designation, x0, x1, z0 and z1.
+   //   ^ z (x1)
+   //   |     4 (z1, top)     Notation: bdy id for meshing (internal designation, geographic meaning)
+   //   +-----------------+
+   //   |                 |
+   // 1 | (x0, west)      | 2 (x1, east)
+   //   |                 |
+   //   +-----------------+--> x (x0)
+   //         3 (z0, bottom)
+   //   - To set velocity BC on boundaries 1 and 2, ess_bdr[0] = ess_bdr[1] = 1: i.e., ess_bdr = {1, 1, 0, 0}
+   //   - To set velocity BC on boundaries 1, 2, and 3, ess_bdr = {1, 1, 1, 0}
+   // However, MFEM's FiniteElementSpace::GetEssentialVDofs() can take only one component at a time while 
+   // looping over all the boundary elements to check the assigned attribute, setting the essential dofs
+   // has to be done for each component separately. Also, the input parameter system assumes the essential
+   // boundaries to be defined individually: e.g., vbc_x1 = 1 (0 by default), vbc_z0 = 1, etc.
+   // So, we work on 
+   //
+
+   const int dim = pmesh->Dimension();
+   int component;
+   ess_bdr = 0;
+   switch (param.bc.vbc_x0)
+   {
+      case 0: // All velocity components free. Don't do anything.
+         break;
+      case 1: // Normal component fixed, shear components free"
+      {
+         ess_bdr[0] = 1; // x0's attribute is 1, so the 0-th element is set to 1.
+         component = 0;  // component 0 is fixed since x-normal.
+         break;
+      }
+      default:
+         unknown_bc_abort( pmesh, myid, "western", "x0", 1 );
+   }
+   switch (param.bc.vbc_x1)
+   {
+      case 0: // All velocity components free. Don't do anything.
+         break;
+      case 1:
+      {
+         ess_bdr[1] = 1; // x1's attribute is 2, so the 1st element is set to 1.
+         component = 0;  // component 0 is fixed since x-normal.
+         break;
+      }
+      default:
+         unknown_bc_abort( pmesh, myid, "eastern", "x1", 2 );
+   }
+   // Here we call GetEssentialVDofs() for 0-th component of velocity (i.e., vx).
+   {
+      Array<int> vdofs_list;
+      get_ess_dofs_for_component(H1FESpace, ess_bdr, component, ess_tdofs, ess_vdofs, vdofs_list);
+      set_vbc_val(v_gf, vdofs_list, param, max_vbc_val);
+   }
+   ess_bdr = 0;
+   switch (param.bc.vbc_z0)
+   {
+      case 0: // All velocity components free. Don't do anything.
+         break;
+      case 1:
+      {
+         ess_bdr[2] = 1;  // y0's attribute is 3, so the 2nd element is set to 1.
+         component = 1;   // since y-normal boundary, component 1 is fixed.
+         break;
+      }
+      default:
+         unknown_bc_abort( pmesh, myid, "bottom", "z0", 3 );
+   }
+   switch (param.bc.vbc_z1)
+   {
+      case 0: // All velocity components free. Don't do anything.
+         break;
+      case 1:
+      {
+         ess_bdr[3] = 1;  // y1's attribute is 4, so the 3rd element is set to 1.
+         component = 1;   // since y-normal boundary, component 1 is fixed.
+         break;
+      }
+      default:
+         unknown_bc_abort( pmesh, myid, "top", "z1", 4 );
+   }
+   // Here we call GetEssentialVDofs() for 1st component of velocity (i.e., vz).
+   {
+      Array<int> vdofs_list;
+      get_ess_dofs_for_component(H1FESpace, ess_bdr, component, ess_tdofs, ess_vdofs, vdofs_list);
+      set_vbc_val(v_gf, vdofs_list, param, max_vbc_val);
+   }
+   if( dim == 3 ) {
+      //          ^ z (x1)
+      //          |      Notation: bdy id for meshing (internal designation, geographic meaning)
+      //           +-------------------------+
+      //         / |                        /|
+      //        /  |                       / |
+      //       /   |    4 (z1, top)       /  |
+      //      /    |                     /   |
+      //     /  1  |     5 (y0, north)  /    |
+      //    +----- |------------------+      |
+      //    | (x0, |__________________|__2___|___> x (x0)
+      //    | west)/                  | (x1, /
+      //    |     /                   |east)/
+      //    |    /     3 (z0, bottom) |    /
+      //    |   /                     |   /
+      //    |  /   6 (y1, south)      |  /
+      //    | /                       | /
+      //    |/                        |/
+      //    +--------- ---------------+
+      //   / y (x2)
+      //
+      ess_bdr = 0;
+      switch (param.bc.vbc_y0)
+      {
+         case 0: // All velocity components free. Don't do anything.
+            break;
+         case 1:
+         {
+            ess_bdr[4] = 1;  // y0's attribute is 5, so the 4th element is set to 1.
+            component = 2;   // since y-normal boundary, the third component (index 2) is fixed.
+            break;
+         }
+         default:
+            unknown_bc_abort( pmesh, myid, "northern", "y0", 5 );
+      }
+      switch (param.bc.vbc_y1)
+      {
+         case 0: // All velocity components free. Don't do anything.
+            break;
+         case 1:
+         {
+            ess_bdr[5] = 1;  // z1's attribute is 6, so the 5th element is set to 1.
+            component = 2;   // since y-normal boundary, the third component (index 2) is fixed.
+            break;
+         }
+         default:
+            unknown_bc_abort( pmesh, myid, "southern", "y1", 6 );
+      }
+         // Here we call GetEssentialVDofs() for 0-th component of velocity (i.e., vx).
+      {
+         Array<int> vdofs_list; 
+         get_ess_dofs_for_component(H1FESpace, ess_bdr, component, ess_tdofs, ess_vdofs, vdofs_list);
+         set_vbc_val(v_gf, vdofs_list, param, max_vbc_val);
+      }
+   }
+}
+
+void initial_velocity(const Vector &x, Vector &v)
+{
+   // Initial velocity can be set here. For instance,
+   //    v(0) =  sin(M_PI*x(0)) * cos(M_PI*x(1));
+   //    v(1) = -cos(M_PI*x(0)) * sin(M_PI*x(1));
+   //    if (x.Size() == 3)
+   //    {
+   //       v(0) *= cos(M_PI*x(2));
+   //       v(1) *= cos(M_PI*x(2));
+   //       v(2) = 0.0;
+   //    }
+   // For now, initial velocity is uniformly zero.
+   v = 0.0;
+}
+
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
@@ -460,158 +653,10 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace L2FESpace_stress(pmesh, &L2FEC, 3*(dim-1)); // FES for stress. EC: Why not of the Coefficient type?
    H1_FECollection H1FEC(param.mesh.order_v, dim);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
-   // Non-positive basis drives oscillation while interpolation wtihin DG type elements. 
-   L2_FECollection l2_fec(param.mesh.order_e, pmesh->Dimension(), BasisType::Positive); 
-   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
-
-   // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
-   // that the boundaries are straight.
-   // Remove square brackets and spaces
-   param.bc.bc_ids.erase(std::remove(param.bc.bc_ids.begin(), param.bc.bc_ids.end(), '['), param.bc.bc_ids.end());
-   param.bc.bc_ids.erase(std::remove(param.bc.bc_ids.begin(), param.bc.bc_ids.end(), ']'), param.bc.bc_ids.end());
-   param.bc.bc_ids.erase(std::remove(param.bc.bc_ids.begin(), param.bc.bc_ids.end(), ' '), param.bc.bc_ids.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss(param.bc.bc_ids);
-   std::vector<int> bc_id;
-    
-   // Temporary variable to store each token
-   std::string token;
-
-   // std::cout <<"check point1"<<std::endl;
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss, token, ',')) 
-   {bc_id.push_back(std::stoi(token)); // Convert string to int and add to vector
-   }
-
-   // std::cout <<"check point2"<<std::endl;
-
-   if(pmesh->bdr_attributes.Max() != bc_id.size())
-   {
-      if (myid == 0){cout << "The number of boundaries are not consistent with the given mesh. \nBC indicator from mesh is " << pmesh->bdr_attributes.Max() << " but input is " << bc_id.size() << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-
-   // Boundary velocity of x component
-   param.bc.bc_vxs.erase(std::remove(param.bc.bc_vxs.begin(), param.bc.bc_vxs.end(), '['), param.bc.bc_vxs.end());
-   param.bc.bc_vxs.erase(std::remove(param.bc.bc_vxs.begin(), param.bc.bc_vxs.end(), ']'), param.bc.bc_vxs.end());
-   param.bc.bc_vxs.erase(std::remove(param.bc.bc_vxs.begin(), param.bc.bc_vxs.end(), ' '), param.bc.bc_vxs.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream vxs(param.bc.bc_vxs);
-   std::vector<double> bc_vx;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(vxs, token, ',')) 
-   {bc_vx.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // Boundary velocity of y component
-   param.bc.bc_vys.erase(std::remove(param.bc.bc_vys.begin(), param.bc.bc_vys.end(), '['), param.bc.bc_vys.end());
-   param.bc.bc_vys.erase(std::remove(param.bc.bc_vys.begin(), param.bc.bc_vys.end(), ']'), param.bc.bc_vys.end());
-   param.bc.bc_vys.erase(std::remove(param.bc.bc_vys.begin(), param.bc.bc_vys.end(), ' '), param.bc.bc_vys.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream vys(param.bc.bc_vys);
-   std::vector<double> bc_vy;
-
-   // Tokenize the string and convert tokens to integers
-   while (getline(vys, token, ',')) 
-   {bc_vy.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // Boundary velocity of z component
-   param.bc.bc_vzs.erase(std::remove(param.bc.bc_vzs.begin(), param.bc.bc_vzs.end(), '['), param.bc.bc_vzs.end());
-   param.bc.bc_vzs.erase(std::remove(param.bc.bc_vzs.begin(), param.bc.bc_vzs.end(), ']'), param.bc.bc_vzs.end());
-   param.bc.bc_vzs.erase(std::remove(param.bc.bc_vzs.begin(), param.bc.bc_vzs.end(), ' '), param.bc.bc_vzs.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream vzs(param.bc.bc_vzs);
-   std::vector<double> bc_vz;
-
-   // Tokenize the string and convert tokens to integers
-   while (getline(vzs, token, ',')) 
-   {bc_vz.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // Dirichlet type boundary condition (i.e., fixing velocity component at boundaries)
-   Array<int> ess_tdofs, ess_vdofs;
-   {
-      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-      for (int i = 0; i < bc_id.size(); ++i) 
-      {
-        ess_bdr = 0;
-        if(bc_id[i] > 0)
-        {
-            if(dim == 2)
-            {
-               switch (bc_id[i])
-               {
-                  // case 1 : x compoent is constained
-                  // case 2 : y compoent is constained
-                  // case 3 : all compoents are constained
-                  case 1: ess_bdr[i] = 1; H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,0); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); break;
-                  case 2: ess_bdr[i] = 1; H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,1); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); break;
-                  case 3: ess_bdr[i] = 1; H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); break;
-                  default:
-                     if (myid == 0)
-                     {
-                        cout << "Unknown boundary type: " << bc_id[i] << '\n';
-                     }
-                     delete pmesh;
-                     MPI_Finalize();
-                     return 3;
-               }
-            }
-            else
-            {
-               switch (bc_id[i])
-               {
-                  // case 1 : x compoent is constained
-                  // case 2 : y compoent is constained
-                  // case 3 : z compoent is constained
-                  // case 4 : all compoents are constained
-                  // case 5 : x and y compoents are constained
-                  // case 6 : x and z compoents are constained
-                  // case 7 : y and z compoents are constained
-                  case 1: ess_bdr[i] = 1; H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,0); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); break;
-                  case 2: ess_bdr[i] = 1; H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,1); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); break;
-                  case 3: ess_bdr[i] = 1; H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,2); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,2); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); break;
-                  case 4: ess_bdr[i] = 1; H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); break;
-                  case 5:
-                     ess_bdr[i] = 1; 
-                     H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,0); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); 
-                     H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,1); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); 
-                     break;
-                  case 6:
-                     ess_bdr[i] = 1; 
-                     H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,0); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); 
-                     H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,2); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,2); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); 
-                     break;
-                  case 7: 
-                     ess_bdr[i] = 1; 
-                     H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,1); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); 
-                     H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list,2); ess_tdofs.Append(dofs_list); H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,2); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list); ess_vdofs.Append(dofs_list); 
-                     break; 
-
-                  default:
-                     if (myid == 0)
-                     {
-                        cout << "Unknown boundary type: " << bc_id[i] << '\n';
-                     }
-                     delete pmesh;
-                     MPI_Finalize();
-                     return 3;
-               }
-            }
-        }
-      }
-   }
-
-   Vector bc_id_pa(pmesh->bdr_attributes.Max());
-   for (int i = 0; i < bc_id.size(); ++i){bc_id_pa[i]=bc_id[i];}
+   // Non-positive basis drives oscillation while interpolation wtihin DG type elements.
+   L2_FECollection L2FEC_positive(param.mesh.order_e, dim, BasisType::Positive);
+   // L2_FECollection L2FEC_positive(param.mesh.order_e, pmesh->Dimension(), BasisType::Positive);
+   ParFiniteElementSpace L2FESpace_positive(pmesh, &L2FEC_positive);
 
    // Define the explicit ODE solver used for time integration.
    ODESolver *ode_solver = NULL;
@@ -633,71 +678,43 @@ int main(int argc, char *argv[])
          return 3;
    }
 
-   // 4. Define the ODE solver for submesh used for time integration. Several implicit
-   //    singly diagonal implicit Runge-Kutta (SDIRK) methods, as well as
-   //    explicit Runge-Kutta methods are available.
-   int ode_solver_type = 12;
-   ODESolver *ode_solver_sub;
-   ODESolver *ode_solver_sub2;
-   switch (ode_solver_type)
-   {
-      // Implicit L-stable methods
-      case 1:  ode_solver_sub = new BackwardEulerSolver; break;
-      case 2:  ode_solver_sub = new SDIRK23Solver(2); break;
-      case 3:  ode_solver_sub = new SDIRK33Solver; break;
-      // Explicit methods
-      case 11: ode_solver_sub = new ForwardEulerSolver; break;
-      case 12: ode_solver_sub = new RK2Solver(0.5); break; // midpoint method
-      case 13: ode_solver_sub = new RK3SSPSolver; break;
-      case 14: ode_solver_sub = new RK4Solver; break;
-      case 15: ode_solver_sub = new GeneralizedAlphaSolver(0.5); break;
-      // Implicit A-stable methods (not L-stable)
-      case 22: ode_solver_sub = new ImplicitMidpointSolver; break;
-      case 23: ode_solver_sub = new SDIRK23Solver; break;
-      case 24: ode_solver_sub = new SDIRK34Solver; break;
-      default:
-         if (myid == 0)
-         {
-            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
-         }
-         delete pmesh;
-         MPI_Finalize();
-         return 3;
-   }
-
-   switch (ode_solver_type)
-   {
-      // Implicit L-stable methods
-      case 1:  ode_solver_sub2 = new BackwardEulerSolver; break;
-      case 2:  ode_solver_sub2 = new SDIRK23Solver(2); break;
-      case 3:  ode_solver_sub2 = new SDIRK33Solver; break;
-      // Explicit methods
-      case 11: ode_solver_sub2 = new ForwardEulerSolver; break;
-      case 12: ode_solver_sub2 = new RK2Solver(0.5); break; // midpoint method
-      case 13: ode_solver_sub2 = new RK3SSPSolver; break;
-      case 14: ode_solver_sub2 = new RK4Solver; break;
-      case 15: ode_solver_sub2 = new GeneralizedAlphaSolver(0.5); break;
-      // Implicit A-stable methods (not L-stable)
-      case 22: ode_solver_sub2 = new ImplicitMidpointSolver; break;
-      case 23: ode_solver_sub2 = new SDIRK23Solver; break;
-      case 24: ode_solver_sub2 = new SDIRK34Solver; break;
-      default:
-         if (myid == 0)
-         {
-            cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
-         }
-         delete pmesh;
-         MPI_Finalize();
-         return 3;
-   }
+   // 4. Define the ODE solver for submesh used for time integration.
+   // int ode_solver_type = 12;
+   // switch (ode_solver_type)
+   // {
+   //    // Implicit L-stable methods
+   //    case 1:  ode_solver_sub = new BackwardEulerSolver; break;
+   //    case 2:  ode_solver_sub = new SDIRK23Solver(2); break;
+   //    case 3:  ode_solver_sub = new SDIRK33Solver; break;
+   //    // Explicit methods
+   //    case 11: ode_solver_sub = new ForwardEulerSolver; break;
+   //    case 12: ode_solver_sub = new RK2Solver(0.5); break; // midpoint method
+   //    case 13: ode_solver_sub = new RK3SSPSolver; break;
+   //    case 14: ode_solver_sub = new RK4Solver; break;
+   //    case 15: ode_solver_sub = new GeneralizedAlphaSolver(0.5); break;
+   //    // Implicit A-stable methods (not L-stable)
+   //    case 22: ode_solver_sub = new ImplicitMidpointSolver; break;
+   //    case 23: ode_solver_sub = new SDIRK23Solver; break;
+   //    case 24: ode_solver_sub = new SDIRK34Solver; break;
+   //    default:
+   //       if (myid == 0)
+   //       {
+   //          cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
+   //       }
+   //       delete pmesh;
+   //       MPI_Finalize();
+   //       return 3;
+   // }
+   ODESolver *ode_solver_sub  = new RK2Solver(0.5);
+   ODESolver *ode_solver_sub2 = new RK2Solver(0.5);
 
    const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
    const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
    if (Mpi::Root())
    {
-      cout << "Number of kinematic (position, velocity) dofs: "
+      cout << "Number of kinematic (position (size dim), velocity (size dim)) dofs: "
            << glob_size_h1 << endl;
-      cout << "Number of specific internal energy dofs: "
+      cout << "Number of specific internal energy (size 1) and stress (size 3*(dim-1)) dofs: "
            << glob_size_l2 << endl;
    }
 
@@ -730,7 +747,7 @@ int main(int argc, char *argv[])
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
 
-   // Create a "sub mesh" from the boundary elements with attribute 3 (top boundary) for Surface process
+   // Create a "sub mesh" from the boundary elements with attribute 4 (z1 or top boundary) for Surface process
    Array<int> bdr_attrs(1);
    bdr_attrs[0] = 4;
    ParSubMesh submesh(ParSubMesh::CreateFromBoundary(*pmesh, bdr_attrs));
@@ -750,13 +767,13 @@ int main(int argc, char *argv[])
    Vector topo_t, topo_t_old;
    topo.GetTrueDofs(topo_t); topo_t_old=topo;
 
-   // Create a "sub mesh" from the boundary elements with attribute 2 (bottom boundary) for flattening 
+   // Create a "sub mesh" from the boundary elements with attribute 3 (z0 or bottom boundary) for flattening 
    Array<int> bdr_attrs_b(1);
    bdr_attrs_b[0] = 3;
    ParSubMesh submesh_bottom(ParSubMesh::CreateFromBoundary(*pmesh, bdr_attrs_b));
    ParFiniteElementSpace sub_fespace2(&submesh_bottom, &H1FEC, pmesh->Dimension()); // nodes of submesh
    ParFiniteElementSpace sub_fespace3(&submesh_bottom, &H1FEC); // topography
-   
+
    // Solve a Poisson problem on the boundary. This just follows ex0p.
    Array<int> boundary_dofs_bot;
    sub_fespace2.GetBoundaryTrueDofs(boundary_dofs_bot);
@@ -770,8 +787,7 @@ int main(int argc, char *argv[])
    Vector bottom_t, bottom_t_old;
    bottom.GetTrueDofs(bottom_t); bottom_t_old=bottom;
 
-
-   // Create a "sub mesh" from the boundary elements with attribute 0
+   // Create a "sub mesh" from the boundary elements with attribute 1 (x0 boundary)
    Array<int> bdr_attrs_x0(1);
    bdr_attrs_x0[0] = 1;
    ParSubMesh submesh_x0(ParSubMesh::CreateFromBoundary(*pmesh, bdr_attrs_x0));
@@ -779,7 +795,7 @@ int main(int argc, char *argv[])
    ParGridFunction x0_side(&sub_fespace4);
    submesh_x0.SetNodalGridFunction(&x0_side);
 
-   // Create a "sub mesh" from the boundary elements with attribute 0
+   // Create a "sub mesh" from the boundary elements with attribute 2 (x1 boundary)
    Array<int> bdr_attrs_x1(1);
    bdr_attrs_x1[0] = 2;
    ParSubMesh submesh_x1(ParSubMesh::CreateFromBoundary(*pmesh, bdr_attrs_x1));
@@ -789,7 +805,7 @@ int main(int argc, char *argv[])
 
    if(dim == 3)
    {
-      // Create a "sub mesh" from the boundary elements with attribute 0
+      // Create a "sub mesh" from the boundary elements with attribute 5 (y0 boundary)
       Array<int> bdr_attrs_y0(1);
       bdr_attrs_y0[0] = 5;
       ParSubMesh submesh_y0(ParSubMesh::CreateFromBoundary(*pmesh, bdr_attrs_y0));
@@ -797,14 +813,13 @@ int main(int argc, char *argv[])
       ParGridFunction y0_side(&sub_fespace4);
       submesh_y0.SetNodalGridFunction(&y0_side);
 
-      // Create a "sub mesh" from the boundary elements with attribute 0
+      // Create a "sub mesh" from the boundary elements with attribute 6 (y1 boundary)
       Array<int> bdr_attrs_y1(1);
       bdr_attrs_y1[0] = 6;
       ParSubMesh submesh_y1(ParSubMesh::CreateFromBoundary(*pmesh, bdr_attrs_y1));
       ParFiniteElementSpace sub_fespace5(&submesh_y1, &H1FEC, pmesh->Dimension()); // right sidewall 
       ParGridFunction y1_side(&sub_fespace5);
       submesh_y1.SetNodalGridFunction(&y1_side);
-
    }
 
    // 
@@ -817,8 +832,8 @@ int main(int argc, char *argv[])
    ConductionOperator oper_sub(  sub_fespace1, param.bc.surf_alpha, param.bc.surf_diff, topo_t   );
    ConductionOperator oper_sub2( sub_fespace3, param.bc.base_alpha, param.bc.base_diff, bottom_t );
 
-   // xyz coordinates in L2 space
-   ParFiniteElementSpace L2FESpace_xyz(pmesh, &l2_fec, dim); //
+   // xyz coordinates in L2 space. EC: What's the purpose of this grid function?
+   ParFiniteElementSpace L2FESpace_xyz(pmesh, &L2FEC_positive, dim); //
    ParGridFunction xyz_gf_l2(&L2FESpace_xyz);
    VectorFunctionCoefficient xyz_coeff(pmesh->Dimension(), xyz0);
    xyz_gf_l2.ProjectCoefficient(xyz_coeff);
@@ -874,277 +889,23 @@ int main(int argc, char *argv[])
    ParGridFunction vol_ini_gf(&L2FESpace);
    ParGridFunction skew_ini_gf(&L2FESpace);
    for (int i = 0; i < vol_ini_gf.Size(); i++){vol_ini_gf[i] = quality[i]; skew_ini_gf[i] = quality[i + e_gf.Size()];}
-   
 
    // Initialize the velocity.
    v_gf = 0.0;
    // PlasticCoefficient p_coeff(dim, xyz_gf_l2, weak_location, param.mat.weak_rad, param.mat.ini_pls);
-   VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
+   VectorFunctionCoefficient v_coeff(pmesh->Dimension(), initial_velocity);
+   // In case velocity is needed at quadrature points or for an integrated quantity over an element.
    v_gf.ProjectCoefficient(v_coeff);
 
+   //
+   // Applying Dirichlet velocity boundary conditions.
+   //
    double max_vbc_val = param.control.max_vbc_val;
-   double v_unit      = param.bc.vel_unit;
-   for (int i = 0; i < bc_id.size(); ++i) 
-   // for (int i = bc_id.size() -1; i > -1; --i) 
-   {
-      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list1, dofs_list2, dofs_list3;
-      if(bc_id[i] > 0)
-      {
-         
-         if(dim == 2)
-            max_vbc_val = std::max(max_vbc_val,  sqrt(pow(v_unit*bc_vx[i], 2) + pow(v_unit*bc_vy[i], 2)));
-         else
-            max_vbc_val = std::max(max_vbc_val,  sqrt(pow(v_unit*bc_vx[i], 2) + pow(v_unit*bc_vy[i], 2) + pow(v_unit*bc_vz[i], 2)));
-
-         ess_bdr = 0;
-         if(dim == 2)
-         {
-            switch (bc_id[i])
-            {
-               // case 1 : x compoent is constained
-               // case 2 : y compoent is constained
-               // case 3 : all compoents are constained
-               case 1: ess_bdr[i] = 1; H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list1); for (int j = 0; j < dofs_list1.Size(); j++){v_gf(dofs_list1[j]) = v_unit*bc_vx[i];} break;
-               case 2: ess_bdr[i] = 1; H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list2); for (int j = 0; j < dofs_list2.Size(); j++){v_gf(dofs_list2[j]) = v_unit*bc_vy[i];} break;
-               case 3: ess_bdr[i] = 1; 
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list1); for (int j = 0; j < dofs_list1.Size(); j++){v_gf(dofs_list1[j]) = v_unit*bc_vx[i];}
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list2); for (int j = 0; j < dofs_list2.Size(); j++){v_gf(dofs_list2[j]) = v_unit*bc_vy[i];} break;
-               
-               default:
-                  if (myid == 0)
-                  {
-                        cout << "Unknown boundary type: " << bc_id[i] << '\n';
-                  }
-                  delete pmesh;
-                  MPI_Finalize();
-                  return 3;
-            }
-         }
-         else
-         {
-            switch (bc_id[i])
-            {
-               // case 1 : x compoent is constained
-               // case 2 : y compoent is constained
-               // case 3 : z compoent is constained
-               // case 4 : all compoents are constained
-               // case 5 : x and y compoents are constained
-               // case 6 : x and z compoents are constained
-               // case 7 : y and z compoents are constained
-               case 1: ess_bdr[i] = 1; H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list1); for (int j = 0; j < dofs_list1.Size(); j++){v_gf(dofs_list1[j]) = v_unit*bc_vx[i];} break;
-               case 2: ess_bdr[i] = 1; H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list2); for (int j = 0; j < dofs_list2.Size(); j++){v_gf(dofs_list2[j]) = v_unit*bc_vy[i];} break;
-               case 3: ess_bdr[i] = 1; H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,2); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list3); for (int j = 0; j < dofs_list3.Size(); j++){v_gf(dofs_list3[j]) = v_unit*bc_vz[i];} break;
-               case 4: ess_bdr[i] = 1; 
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list1); for (int j = 0; j < dofs_list1.Size(); j++){v_gf(dofs_list1[j]) = v_unit*bc_vx[i];}
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list2); for (int j = 0; j < dofs_list2.Size(); j++){v_gf(dofs_list2[j]) = v_unit*bc_vy[i];}
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,2); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list3); for (int j = 0; j < dofs_list3.Size(); j++){v_gf(dofs_list3[j]) = v_unit*bc_vz[i];} break;
-               case 5: ess_bdr[i] = 1; 
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list1); for (int j = 0; j < dofs_list1.Size(); j++){v_gf(dofs_list1[j]) = v_unit*bc_vx[i];}
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list2); for (int j = 0; j < dofs_list2.Size(); j++){v_gf(dofs_list2[j]) = v_unit*bc_vy[i];} break;
-               case 6: ess_bdr[i] = 1;
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,0); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list1); for (int j = 0; j < dofs_list1.Size(); j++){v_gf(dofs_list1[j]) = v_unit*bc_vx[i];}
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,2); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list3); for (int j = 0; j < dofs_list3.Size(); j++){v_gf(dofs_list3[j]) = v_unit*bc_vz[i];} break;
-               case 7: ess_bdr[i] = 1;
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,1); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list2); for (int j = 0; j < dofs_list2.Size(); j++){v_gf(dofs_list2[j]) = v_unit*bc_vy[i];}
-                       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker,2); FiniteElementSpace::MarkerToList(dofs_marker, dofs_list3); for (int j = 0; j < dofs_list3.Size(); j++){v_gf(dofs_list3[j]) = v_unit*bc_vz[i];} break;
-
-               default:
-                  if (myid == 0)
-                  {
-                     cout << "Unknown boundary type: " << bc_id[i] << '\n';
-                  }
-                  delete pmesh;
-                  MPI_Finalize();
-                  return 3;
-            }
-         }
-      }
-   }
-
-   // Sync the data location of v_gf with its base, S
+   Array<int> ess_tdofs, ess_vdofs;
+   Array<int> ess_bdr(pmesh->bdr_attributes.Max());
+   // This function returns a value but not checked here.
+   set_essential_bc( myid, pmesh, H1FESpace, param, ess_bdr, ess_tdofs, ess_vdofs, v_gf, max_vbc_val );
    v_gf.SyncAliasMemory(S);
-
-   // String (Material) extraction
-   param.mat.rho.erase(std::remove(param.mat.rho.begin(), param.mat.rho.end(), '['), param.mat.rho.end());
-   param.mat.rho.erase(std::remove(param.mat.rho.begin(), param.mat.rho.end(), ']'), param.mat.rho.end());
-   param.mat.rho.erase(std::remove(param.mat.rho.begin(), param.mat.rho.end(), ' '), param.mat.rho.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss2(param.mat.rho);
-   std::vector<double> rho_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss2, token, ',')) 
-   {rho_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   param.mat.lambda.erase(std::remove(param.mat.lambda.begin(), param.mat.lambda.end(), '['), param.mat.lambda.end());
-   param.mat.lambda.erase(std::remove(param.mat.lambda.begin(), param.mat.lambda.end(), ']'), param.mat.lambda.end());
-   param.mat.lambda.erase(std::remove(param.mat.lambda.begin(), param.mat.lambda.end(), ' '), param.mat.lambda.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss3(param.mat.lambda);
-   std::vector<double> lambda_vec;
-
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss3, token, ',')) 
-   {
-      lambda_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.mu.erase(std::remove(param.mat.mu.begin(), param.mat.mu.end(), '['), param.mat.mu.end());
-   param.mat.mu.erase(std::remove(param.mat.mu.begin(), param.mat.mu.end(), ']'), param.mat.mu.end());
-   param.mat.mu.erase(std::remove(param.mat.mu.begin(), param.mat.mu.end(), ' '), param.mat.mu.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss4(param.mat.mu);
-   std::vector<double> mu_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss4, token, ',')) 
-   {mu_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.tension_cutoff.erase(std::remove(param.mat.tension_cutoff.begin(), param.mat.tension_cutoff.end(), '['), param.mat.tension_cutoff.end());
-   param.mat.tension_cutoff.erase(std::remove(param.mat.tension_cutoff.begin(), param.mat.tension_cutoff.end(), ']'), param.mat.tension_cutoff.end());
-   param.mat.tension_cutoff.erase(std::remove(param.mat.tension_cutoff.begin(), param.mat.tension_cutoff.end(), ' '), param.mat.tension_cutoff.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss5(param.mat.tension_cutoff);
-   std::vector<double> tension_cutoff_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss5, token, ',')) 
-   {tension_cutoff_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-   
-   // String (Material) extraction
-   param.mat.cohesion0.erase(std::remove(param.mat.cohesion0.begin(), param.mat.cohesion0.end(), '['), param.mat.cohesion0.end());
-   param.mat.cohesion0.erase(std::remove(param.mat.cohesion0.begin(), param.mat.cohesion0.end(), ']'), param.mat.cohesion0.end());
-   param.mat.cohesion0.erase(std::remove(param.mat.cohesion0.begin(), param.mat.cohesion0.end(), ' '), param.mat.cohesion0.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss6(param.mat.cohesion0);
-   std::vector<double> cohesion0_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss6, token, ',')) 
-   {cohesion0_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.cohesion1.erase(std::remove(param.mat.cohesion1.begin(), param.mat.cohesion1.end(), '['), param.mat.cohesion1.end());
-   param.mat.cohesion1.erase(std::remove(param.mat.cohesion1.begin(), param.mat.cohesion1.end(), ']'), param.mat.cohesion1.end());
-   param.mat.cohesion1.erase(std::remove(param.mat.cohesion1.begin(), param.mat.cohesion1.end(), ' '), param.mat.cohesion1.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss7(param.mat.cohesion1);
-   std::vector<double> cohesion1_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss7, token, ',')) 
-   {cohesion1_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.friction_angle0.erase(std::remove(param.mat.friction_angle0.begin(), param.mat.friction_angle0.end(), '['), param.mat.friction_angle0.end());
-   param.mat.friction_angle0.erase(std::remove(param.mat.friction_angle0.begin(), param.mat.friction_angle0.end(), ']'), param.mat.friction_angle0.end());
-   param.mat.friction_angle0.erase(std::remove(param.mat.friction_angle0.begin(), param.mat.friction_angle0.end(), ' '), param.mat.friction_angle0.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss8(param.mat.friction_angle0);
-   std::vector<double> friction_angle0_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss8, token, ',')) 
-   {friction_angle0_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.friction_angle1.erase(std::remove(param.mat.friction_angle1.begin(), param.mat.friction_angle1.end(), '['), param.mat.friction_angle1.end());
-   param.mat.friction_angle1.erase(std::remove(param.mat.friction_angle1.begin(), param.mat.friction_angle1.end(), ']'), param.mat.friction_angle1.end());
-   param.mat.friction_angle1.erase(std::remove(param.mat.friction_angle1.begin(), param.mat.friction_angle1.end(), ' '), param.mat.friction_angle1.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss81(param.mat.friction_angle1);
-   std::vector<double> friction_angle1_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss81, token, ',')) 
-   {friction_angle1_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.dilation_angle0.erase(std::remove(param.mat.dilation_angle0.begin(), param.mat.dilation_angle0.end(), '['), param.mat.dilation_angle0.end());
-   param.mat.dilation_angle0.erase(std::remove(param.mat.dilation_angle0.begin(), param.mat.dilation_angle0.end(), ']'), param.mat.dilation_angle0.end());
-   param.mat.dilation_angle0.erase(std::remove(param.mat.dilation_angle0.begin(), param.mat.dilation_angle0.end(), ' '), param.mat.dilation_angle0.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss9(param.mat.dilation_angle0);
-   std::vector<double> dilation_angle0_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss9, token, ',')) 
-   {dilation_angle0_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.dilation_angle1.erase(std::remove(param.mat.dilation_angle1.begin(), param.mat.dilation_angle1.end(), '['), param.mat.dilation_angle1.end());
-   param.mat.dilation_angle1.erase(std::remove(param.mat.dilation_angle1.begin(), param.mat.dilation_angle1.end(), ']'), param.mat.dilation_angle1.end());
-   param.mat.dilation_angle1.erase(std::remove(param.mat.dilation_angle1.begin(), param.mat.dilation_angle1.end(), ' '), param.mat.dilation_angle1.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss91(param.mat.dilation_angle1);
-   std::vector<double> dilation_angle1_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss91, token, ',')) 
-   {dilation_angle1_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.pls0.erase(std::remove(param.mat.pls0.begin(), param.mat.pls0.end(), '['), param.mat.pls0.end());
-   param.mat.pls0.erase(std::remove(param.mat.pls0.begin(), param.mat.pls0.end(), ']'), param.mat.pls0.end());
-   param.mat.pls0.erase(std::remove(param.mat.pls0.begin(), param.mat.pls0.end(), ' '), param.mat.pls0.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss10(param.mat.pls0);
-   std::vector<double> pls0_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss10, token, ',')) 
-   {pls0_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.pls1.erase(std::remove(param.mat.pls1.begin(), param.mat.pls1.end(), '['), param.mat.pls1.end());
-   param.mat.pls1.erase(std::remove(param.mat.pls1.begin(), param.mat.pls1.end(), ']'), param.mat.pls1.end());
-   param.mat.pls1.erase(std::remove(param.mat.pls1.begin(), param.mat.pls1.end(), ' '), param.mat.pls1.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss11(param.mat.pls1);
-   std::vector<double> pls1_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss11, token, ',')) 
-   {pls1_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
-
-   // String (Material) extraction
-   param.mat.plastic_viscosity.erase(std::remove(param.mat.plastic_viscosity.begin(), param.mat.plastic_viscosity.end(), '['), param.mat.plastic_viscosity.end());
-   param.mat.plastic_viscosity.erase(std::remove(param.mat.plastic_viscosity.begin(), param.mat.plastic_viscosity.end(), ']'), param.mat.plastic_viscosity.end());
-   param.mat.plastic_viscosity.erase(std::remove(param.mat.plastic_viscosity.begin(), param.mat.plastic_viscosity.end(), ' '), param.mat.plastic_viscosity.end());
-
-   // Create a stringstream to tokenize the string
-   std::stringstream ss12(param.mat.plastic_viscosity);
-   std::vector<double> plastic_viscosity_vec;
-    
-   // Tokenize the string and convert tokens to integers
-   while (getline(ss12, token, ',')) 
-   {plastic_viscosity_vec.push_back(std::stod(token)); // Convert string to int and add to vector
-   }
 
    // Initialize density and specific internal energy values. We interpolate in
    // a non-positive basis to get the correct values at the dofs. Then we do an
@@ -1153,44 +914,42 @@ int main(int argc, char *argv[])
    // this density is a temporary function and it will not be updated during the
    // time evolution.
    int num_materials = pmesh->attributes.Max();
-   Vector z_rho(pmesh->attributes.Max());
-   Vector s_rho(pmesh->attributes.Max());
-
-   double pseudo_speed =  max_vbc_val * param.control.mscale;
-   double pseudo_speed_sqrd =  pseudo_speed * pseudo_speed;
-
-   // EC: Why consider this case separately? Whatever the size is, shouldn't it be the same with attributes.Max()?
-   if(rho_vec.size() == 1) { 
-      z_rho = rho_vec[0]; 
-      s_rho = (lambda_vec[0] + 2*mu_vec[0]) / pseudo_speed_sqrd;
-   }
-   else if(rho_vec.size() != pmesh->attributes.Max())
+   if(num_materials != param.mat.nmat)
    {
-      if (myid == 0)
-         cout << "The number of rho are not consistent with material ID in the given mesh." << endl;        
+      if (myid == 0) {
+         cout << __FILE__<<":"<<__LINE__<< endl;
+         cout <<"\tThe number of mesh attributes, "<<num_materials<<", are not consistent with the number of materials, "<<param.mat.nmat<<", in the input file."<< endl;
+      }
       delete pmesh;
       MPI_Finalize();
       return 3;
    }
-   else 
-   {
-      for (int i = 0; i < pmesh->attributes.Max(); i++) {
-         z_rho[i] = rho_vec[i]; 
-         s_rho[i] = (lambda_vec[i] + 2*mu_vec[i]) / pseudo_speed_sqrd;
-      }
-   }
-   
-   ParGridFunction rho0_gf(&L2FESpace);
-   ParGridFunction fictitious_rho0_gf(&L2FESpace);
 
-   PWConstCoefficient rho0_coeff(z_rho);
-   PWConstCoefficient scale_rho0_coeff(s_rho);
-   ParGridFunction l2_rho0_gf(&l2_fes),l2_e(&l2_fes);
-   l2_rho0_gf.ProjectCoefficient(rho0_coeff);
-   rho0_gf.ProjectGridFunction(l2_rho0_gf);
-   l2_rho0_gf.ProjectCoefficient(scale_rho0_coeff);
-   fictitious_rho0_gf.ProjectGridFunction(l2_rho0_gf);
+   Vector rho0(pmesh->attributes.Max());
+   Vector fictitious_rho0(pmesh->attributes.Max());
+   double pseudo_speed =  max_vbc_val * param.control.mscale;
+   double pseudo_speed_sqrd =  pseudo_speed * pseudo_speed;
+   for (int i = 0; i < pmesh->attributes.Max(); i++) {
+      rho0[i] = param.mat.rho[i];
+      fictitious_rho0[i] = (param.mat.lambda[i] + 2*param.mat.mu[i]) / pseudo_speed_sqrd;
+   }
+
+   // Initialize the density and specific internal energy.
+   PWConstCoefficient rho0_coeff(rho0);
+   ParGridFunction rho0_gf(&L2FESpace);
+   rho0_gf.ProjectCoefficient(rho0_coeff);
    
+   PWConstCoefficient fictitious_rho0_coeff(fictitious_rho0);
+   ParGridFunction fictitious_rho0_gf(&L2FESpace);
+   fictitious_rho0_gf.ProjectCoefficient(fictitious_rho0_coeff);
+
+   // ParGridFunction l2_rho0_gf(&L2FESpace_positive);
+   // l2_rho0_gf.ProjectCoefficient(rho0_coeff);
+   // rho0_gf.ProjectGridFunction(l2_rho0_gf);
+   // l2_rho0_gf.ProjectCoefficient(fictitious_rho0_coeff);
+   // fictitious_rho0_gf.ProjectGridFunction(l2_rho0_gf);
+   
+   ParGridFunction l2_e(&L2FESpace_positive);
    if (param.sim.problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -1209,56 +968,38 @@ int main(int argc, char *argv[])
 
    // Piecewise constant elastic stiffness over the Lagrangian mesh.
    // Lambda and Mu is Lame's first and second constants
-   Vector lambda(pmesh->attributes.Max());
-   Vector mu(pmesh->attributes.Max());
-   // lambda = param.mat.lambda;
-   // mu = param.mat.mu;
-   if(lambda_vec.size() == 1) {lambda =lambda_vec[0];}
-   else if(lambda_vec.size() != pmesh->attributes.Max())
+   if(param.mat.lambda.Size() != pmesh->attributes.Max())
    {
       if (myid == 0){cout << "The number of lambda are not consistent with material ID in the given mesh." << endl; }        
       delete pmesh;
       MPI_Finalize();
       return 3;
    }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {lambda[i] = lambda_vec[i];}}
 
-   if(mu_vec.size() == 1) {mu =mu_vec[0];}
-   else if(mu_vec.size() != pmesh->attributes.Max())
+   if(param.mat.mu.Size() != pmesh->attributes.Max())
    {
       if (myid == 0){cout << "The number of mu are not consistent with material ID in the given mesh." << endl; }        
       delete pmesh;
       MPI_Finalize();
       return 3;
    }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {mu[i] = mu_vec[i];}}
 
-   PWConstCoefficient lambda_func(lambda);
-   PWConstCoefficient mu_func(mu);
-   
-   // Project PWConstCoefficient to grid function
-   L2_FECollection lambda_fec(param.mesh.order_e, pmesh->Dimension());
-   ParFiniteElementSpace lambda_fes(pmesh, &lambda_fec);
-   ParGridFunction lambda0_gf(&lambda_fes);
+   // Project lambda and mu as PWConstCoefficient to grid function
+   PWConstCoefficient lambda_func(param.mat.lambda);
+   ParGridFunction lambda0_gf(&L2FESpace);
    lambda0_gf.ProjectCoefficient(lambda_func);
    
-   L2_FECollection mu_fec(param.mesh.order_e, pmesh->Dimension());
-   ParFiniteElementSpace mu_fes(pmesh, &mu_fec);
-   ParGridFunction mu0_gf(&mu_fes);
+   PWConstCoefficient mu_func(param.mat.mu);
+   ParGridFunction mu0_gf(&L2FESpace);
    mu0_gf.ProjectCoefficient(mu_func);
 
-   // Piecewise constant for material index
+   // Define material index as PWConstCoefficient and
+   // project it to a grid function
    Vector mat(pmesh->attributes.Max());
-   for (int i = 0; i < pmesh->attributes.Max(); i++)
-   {
-      mat[i] = i;
-   }
+   for (int i = 0; i < mat.Size(); i++)
+      mat[i] = i; // Assuming material IDs start from 0
    PWConstCoefficient mat_func(mat);
-
-   // Project PWConstCoefficient to grid function
-   L2_FECollection mat_fec(param.mesh.order_e, pmesh->Dimension());
-   ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   ParGridFunction mat_gf(&mat_fes);
+   ParGridFunction mat_gf(&L2FESpace);
    mat_gf.ProjectCoefficient(mat_func);
 
    // Composition
@@ -1266,163 +1007,35 @@ int main(int argc, char *argv[])
    ParGridFunction comp_gf(&L2FESpace_mat); ParGridFunction comp_ref_gf(&L2FESpace_mat);
    CompoCoefficient comp_coeff(num_materials, mat_gf);
    comp_gf.ProjectCoefficient(comp_coeff); // Initialize the composition with material indicators
-
-   // for (int i = 0; i < num_materials; i++)
-   // {
-   //    for (int j = 0; j < e_gf.Size(); j++)
-   //    {
-   //       if(mat_gf[j] == i){comp_gf[j+e_gf.Size()*i] = 1.0;}
-   //    }
-   // }
-
    comp_ref_gf = comp_gf;
 
-   // Material properties of Plasticity
-   Vector tension_cutoff(pmesh->attributes.Max());
-   Vector cohesion0(pmesh->attributes.Max());
-   Vector cohesion1(pmesh->attributes.Max());
-   Vector friction_angle0(pmesh->attributes.Max());
-   Vector friction_angle1(pmesh->attributes.Max());
-   Vector dilation_angle0(pmesh->attributes.Max());
-   Vector dilation_angle1(pmesh->attributes.Max());
-   Vector plastic_viscosity(pmesh->attributes.Max());
-   Vector pls0(pmesh->attributes.Max());
-   Vector pls1(pmesh->attributes.Max());
-
-   if(tension_cutoff_vec.size() == 1) {tension_cutoff =tension_cutoff_vec[0];}
-   else if(tension_cutoff_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of tension_cutoff are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {tension_cutoff[i] = tension_cutoff_vec[i];}}
-
-   if(cohesion0_vec.size() == 1) {cohesion0 =cohesion0_vec[0];}
-   else if(cohesion0_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of cohesion0 are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {cohesion0[i] = cohesion0_vec[i];}}
-
-   if(cohesion1_vec.size() == 1) {cohesion1 =cohesion1_vec[0];}
-   else if(cohesion1_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of cohesion1 are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {cohesion1[i] = cohesion1_vec[i];}}
-
-   if(friction_angle0_vec.size() == 1) {friction_angle0 =friction_angle0_vec[0];}
-   else if(friction_angle0_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of friction_angle0 are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {friction_angle0[i] = friction_angle0_vec[i];}}
-
-   if(friction_angle1_vec.size() == 1) {friction_angle1 =friction_angle1_vec[0];}
-   else if(friction_angle1_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of friction_angle1 are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {friction_angle1[i] = friction_angle1_vec[i];}}
-
-   if(dilation_angle0_vec.size() == 1) {dilation_angle0 =dilation_angle0_vec[0];}
-   else if(dilation_angle0_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of dilation_angle0 are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {dilation_angle0[i] = dilation_angle0_vec[i];}}
-
-   if(dilation_angle1_vec.size() == 1) {dilation_angle1 =dilation_angle1_vec[0];}
-   else if(dilation_angle1_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of dilation_angle1 are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {dilation_angle1[i] = dilation_angle1_vec[i];}}
-
-   if(pls0_vec.size() == 1) {pls0 =pls0_vec[0];}
-   else if(pls0_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of pls0 are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {pls0[i] = pls0_vec[i];}}
-
-   if(pls1_vec.size() == 1) {pls1 =pls1_vec[0];}
-   else if(pls1_vec.size() != pmesh->attributes.Max())
-   {
-      if (myid == 0){cout << "The number of pls1 are not consistent with material ID in the given mesh." << endl; }        
-      delete pmesh;
-      MPI_Finalize();
-      return 3;
-   }
-   else {for (int i = 0; i < pmesh->attributes.Max(); i++) {pls1[i] = pls1_vec[i];}}
-
-   if(param.mat.viscoplastic)
-   {
-      if(plastic_viscosity_vec.size() == 1) {plastic_viscosity =plastic_viscosity_vec[0];}
-      else if(plastic_viscosity_vec.size() != pmesh->attributes.Max())
-      {
-         if (myid == 0){cout << "The number of plastic_viscosity are not consistent with material ID in the given mesh." << endl; }        
-         delete pmesh;
-         MPI_Finalize();
-         return 3;
-      }
-      else {for (int i = 0; i < pmesh->attributes.Max(); i++) {plastic_viscosity[i] = plastic_viscosity_vec[i];}}
-   }
-   else
-   {
-      if (myid == 0){cout << "viscoplasticity is not activate." << endl; }        
-      plastic_viscosity = 1.0e+300;
-   }
-   
-   // lithostatic pressure
+   // Stress initialization
    s_gf=0.0;
-   ATMCoefficient ATM_coeff(dim, xyz_gf_l2, rho0_gf, param.control.gravity, param.control.thickness);
-   s_gf.ProjectCoefficient(ATM_coeff);
-
-   if(param.control.lithostatic)
+   if( param.control.gravity > 0.0 ) 
    {
-      LithostaticCoefficient Lithostatic_coeff(dim, xyz_gf_l2, rho0_gf, param.control.gravity, param.control.thickness);
-      s_gf.ProjectCoefficient(Lithostatic_coeff);
-   }   
-
+      if(param.control.lithostatic) // lithostatic + atmospheric pressure
+      {
+         LithostaticCoefficient Lithostatic_coeff(dim, xyz_gf_l2, rho0_gf, param.control.gravity, param.control.thickness);
+         s_gf.ProjectCoefficient(Lithostatic_coeff);
+      }
+      else if(param.control.atmospheric){
+         // Initialize stress field to atmospheric pressure. (EC: Why?)
+         ATMCoefficient ATM_coeff(dim, xyz_gf_l2, rho0_gf, param.control.gravity, param.control.thickness);
+         s_gf.ProjectCoefficient(ATM_coeff);
+      }
+   }
+   // Sync the data location of s_gf with its base, S. (EC: necessary?)
    s_gf.SyncAliasMemory(S);
-
    ParGridFunction s_old_gf(&L2FESpace_stress);
    s_old_gf=s_gf;
 
-   // Copy initial cooriante to x_gf
-   ParGridFunction x_ini_gf(&H1FESpace); 
+   // Copy initial coordinates to x_ini_gf (EC: for total displacements?)
+   ParGridFunction x_ini_gf(&H1FESpace), x_old_gf(&H1FESpace);
    x_ini_gf = x_gf; 
-   // x_ini_gf.SyncAliasMemory(S);
-   ParGridFunction x_old_gf(&H1FESpace);
-   x_old_gf = 0.0;
+   x_old_gf = 0.0; // (EC: for displacement increments?)
 
    // Plastic strain (J2 strain invariant)
-   ParGridFunction p_gf(&L2FESpace);
-   ParGridFunction p_gf_old(&L2FESpace);
+   ParGridFunction p_gf(&L2FESpace), p_gf_old(&L2FESpace);
    p_gf=0.0; p_gf_old = 0.0;
    Vector weak_location(dim);
    if(dim == 2){weak_location[0] = param.mat.weak_x; weak_location[1] = param.mat.weak_y;}
@@ -1436,7 +1049,7 @@ int main(int argc, char *argv[])
    PlasticCoefficient p_coeff(dim, xyz_gf_l2, weak_location, param.mat.weak_rad, param.mat.ini_pls);
    // p_gf.ProjectCoefficient(p_coeff);
    // // interpolation using non-basis function
-   ParGridFunction l2_p_gf(&l2_fes);
+   ParGridFunction l2_p_gf(&L2FESpace_positive);
    l2_p_gf.ProjectCoefficient(p_coeff);
    p_gf.ProjectGridFunction(l2_p_gf);
 
@@ -1461,14 +1074,10 @@ int main(int argc, char *argv[])
                                           H1FESpace, L2FESpace, L2FESpace_stress, ess_tdofs,
                                           // rho0_coeff, scale_rho0_coeff, rho0_gf,
                                           rho0_gf, fictitious_rho0_gf,
-                                          mat_gf, source, param.solver.cfl,
-                                          visc, vorticity, param.solver.p_assembly,
-                                          param.solver.cg_tol, param.solver.cg_max_iter, 
-                                          param.solver.ftz_tol,
-                                          param.mesh.order_q, lambda0_gf, mu0_gf, param.control.mscale, param.control.gravity, param.control.thickness,
-                                          param.bc.winkler_foundation, param.bc.winkler_rho, param.control.dyn_damping, param.control.dyn_factor, bc_id_pa, max_vbc_val);
-    
-
+                                          mat_gf, source, 
+                                          visc, vorticity,
+                                          lambda0_gf, mu0_gf,
+                                          param, max_vbc_val);
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -1702,33 +1311,7 @@ int main(int argc, char *argv[])
 
       if(param.mat.plastic)
       {
-         /*
-         // temporay stress and plastic strain array
-         ParFiniteElementSpace L2FESpace_temp(pmesh, &L2FEC, 3*(dim-1) + 1); 
-         ParGridFunction temp_gf(&L2FESpace_temp); ParGridFunction temp2_gf(&L2FESpace); 
-         temp_gf = 1.0;
-          
-         if(dim == 2)
-         {
-            // simplified model is on test. 
-            // ReturnMapping2D_simple_Coefficient Return_coeff(dim, h_min, dt_old, param.mat.viscoplastic, comp_gf, s_gf, s_old_gf, p_gf, mat_gf, z_rho, lambda, mu, tension_cutoff, cohesion0, cohesion1, pls0, pls1, friction_angle0, friction_angle1, dilation_angle0, dilation_angle1, plastic_viscosity);
-            ReturnMapping2DCoefficient Return_coeff(dim, h_min, dt_old, param.mat.viscoplastic, comp_gf, s_gf, s_old_gf, p_gf, mat_gf, z_rho, lambda, mu, tension_cutoff, cohesion0, cohesion1, pls0, pls1, friction_angle0, friction_angle1, dilation_angle0, dilation_angle1, plastic_viscosity);
-            temp_gf.ProjectCoefficient(Return_coeff);
-         }
-         else
-         {
-            ReturnMapping3DCoefficient Return_coeff(dim, h_min, dt_old, param.mat.viscoplastic, comp_gf, s_gf, s_old_gf, p_gf, mat_gf, z_rho, lambda, mu, tension_cutoff, cohesion0, cohesion1, pls0, pls1, friction_angle0, friction_angle1, dilation_angle0, dilation_angle1, plastic_viscosity);
-            temp_gf.ProjectCoefficient(Return_coeff);
-         }
-         StressMappingCoefficient Stress_coeff(dim, temp_gf);
-         s_gf.ProjectCoefficient(Stress_coeff);
-         PlasticityMappingCoefficient Plasticity_coeff(dim, temp_gf);
-         temp2_gf.ProjectCoefficient(Plasticity_coeff);
-         p_gf.Add(1.0, temp2_gf);
-         */
-
-         if(dim == 2){Returnmapping2d (comp_gf, s_gf, s_old_gf, p_gf, mat_gf, dim, h_min, z_rho, lambda, mu, tension_cutoff, cohesion0, cohesion1, pls0, pls1, friction_angle0, friction_angle1, dilation_angle0, dilation_angle1, plastic_viscosity, param.mat.viscoplastic, dt_old);}
-         else{Returnmapping3d (comp_gf, s_gf, s_old_gf, p_gf, mat_gf, dim, h_min, z_rho, lambda, mu, tension_cutoff, cohesion0, cohesion1, pls0, pls1, friction_angle0, friction_angle1, dilation_angle0, dilation_angle1, plastic_viscosity, param.mat.viscoplastic, dt_old);}   
+         Returnmapping(dim, comp_gf, s_gf, s_old_gf, p_gf, mat_gf, param, h_min, dt_old);
          n_p_gf  = ini_p_gf;
          n_p_gf -= p_gf;
          n_p_gf.Neg();
@@ -2122,8 +1705,8 @@ int main(int argc, char *argv[])
                     comp_gf[j+comps.Size()*i] = comp_gf[j+comps.Size()*i]/all_comp;
                   //   comp_gf[j+comps.Size()*i] = comp_gf[j+comps.Size()*i]/rmass[j];
                   //   rho_gf[j] = rho_gf[j] + z_rho[i]*comp_gf[j+comps.Size()*i];
-                    lambda0_gf[j] = lambda0_gf[j] + lambda[i]*comp_gf[j+comps.Size()*i];
-                    mu0_gf[j] = mu0_gf[j] + mu[i]*comp_gf[j+comps.Size()*i];
+                    lambda0_gf[j] = lambda0_gf[j] + param.mat.lambda[i]*comp_gf[j+comps.Size()*i];
+                    mu0_gf[j] = mu0_gf[j] + param.mat.mu[i]*comp_gf[j+comps.Size()*i];
                   }
 
                   if(dim == 2){s_gf[j+S1.Size()*0]=S1[j]/rmass[j];s_gf[j+S1.Size()*1]=S2[j]/rmass[j];s_gf[j+S1.Size()*2]=S3[j]/rmass[j];}
@@ -2351,7 +1934,7 @@ int main(int argc, char *argv[])
                   pd->Save();
             }
 
-            MFEM_ABORT("The time step crashed!"); 
+            MFEM_ABORT("Aborting. dt became smaller than 1.0e-38 s!"); 
          }
             t = t_old;
             S = S_old;

@@ -1,6 +1,7 @@
-#ifndef LAGHOST_PARAMETERS_HPP
-#define LAGHOST_PARAMETERS_HPP
+#ifndef MFEM_LAGHOST_PARAMETERS
+#define MFEM_LAGHOST_PARAMETERS
 
+#include "mfem.hpp"
 #include <map>
 #include <string>
 #include "../core/laghost_constants.hpp"
@@ -43,6 +44,7 @@ struct Control {
     int    transient_num;
     // double flat_rate;
     bool   lithostatic;
+    bool   atmospheric;
     double init_dt;
     double mscale;
     double gravity; // magnitude 
@@ -67,13 +69,38 @@ struct Meshing {
 
 struct BC {
     // int_vec bc_ids;
-    std::string bc_unit;
-    std::string bc_ids;
-    std::string bc_vxs;
-    std::string bc_vys;
-    std::string bc_vzs;
-    double vel_unit;
+    std::string vbc_unit;
+    double vbc_factor;
+    // std::vector<int>    bc_id;
+    // std::vector<double> bc_vx;
+    // std::vector<double> bc_vy;
+    // std::vector<double> bc_vz;
+    int vbc_x0;
+    int vbc_x1;
+    int vbc_z0;
+    int vbc_z1;
+    int vbc_y0;
+    int vbc_y1;
 
+    double vbc_x0_val0;
+    double vbc_x0_val1;
+    double vbc_x0_val2;
+    double vbc_x1_val0;
+    double vbc_x1_val1;
+    double vbc_x1_val2;
+    double vbc_z0_val0;
+    double vbc_z0_val1;
+    double vbc_z0_val2;
+    double vbc_z1_val0;
+    double vbc_z1_val1;
+    double vbc_z1_val2;
+    double vbc_y0_val0;
+    double vbc_y0_val1;
+    double vbc_y0_val2;
+    double vbc_y1_val0;
+    double vbc_y1_val1;
+    double vbc_y1_val2;
+    
     bool   winkler_foundation;
     bool   winkler_flat;
     double winkler_rho; // Density of substratum
@@ -88,24 +115,25 @@ struct BC {
 struct Mat {
     bool   plastic;
     bool   viscoplastic;
-    std::string rho;
-    std::string lambda;
-    std::string mu;
+    int    nmat;
+    mfem::Vector rho;
+    mfem::Vector lambda;
+    mfem::Vector mu;
     // std::string weak_rad;
     // std::string weak_x;
     // std::string weak_y;
     // std::string weak_z;
     // std::string ini_pls;
-    std::string tension_cutoff;
-    std::string cohesion0;
-    std::string cohesion1;
-    std::string friction_angle0;
-    std::string friction_angle1;
-    std::string dilation_angle0;
-    std::string dilation_angle1;
-    std::string pls0;
-    std::string pls1;
-    std::string plastic_viscosity;
+    mfem::Vector tension_cutoff;
+    mfem::Vector cohesion0;
+    mfem::Vector cohesion1;
+    mfem::Vector friction_angle0;
+    mfem::Vector friction_angle1;
+    mfem::Vector dilation_angle0;
+    mfem::Vector dilation_angle1;
+    mfem::Vector pls0;
+    mfem::Vector pls1;
+    mfem::Vector plastic_viscosity;
 
     // double lambda;
     // double mu;
@@ -170,5 +198,4 @@ struct Param {
     Mat mat;
     TMOP tmop;
 };
-
-#endif
+#endif // MFEM_LAGHOST_PARAMETERS

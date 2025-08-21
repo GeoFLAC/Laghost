@@ -90,26 +90,18 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
                          double &volume);
 
 LagrangianGeoOperator::LagrangianGeoOperator(const int size,
-                                                 ParFiniteElementSpace &h1,
-                                                 ParFiniteElementSpace &l2,
-                                                 ParFiniteElementSpace &l2_stress,
-                                                 const Array<int> &ess_tdofs,
-                                                //  Coefficient &_rho0_coeff,
-                                                //  Coefficient &_scale_rho0_coeff,
-                                                 ParGridFunction &rho0_gf,
-                                                 ParGridFunction &fictitious_rho0_gf,
-                                                 ParGridFunction &gamma_gf,
-                                                 const int source,
-                                                 const double cfl,
-                                                 const bool visc,
-                                                 const bool vort,
-                                                 const bool p_assembly,
-                                                 const double cgt,
-                                                 const int cgiter,
-                                                 double ftz,
-                                                 const int oq,
-                                                 ParGridFunction &lambda_gf, ParGridFunction &mu_gf, double mscale, const double gravity, const double _thickness, 
-                                                 const bool winkler_foundation, const double _winkler_rho, const bool dyn_damping, const double _dyn_factor, Vector _bc_id_pa, const double _vbc_max_val) : // -0-
+                                             ParFiniteElementSpace &h1,
+                                             ParFiniteElementSpace &l2,
+                                             ParFiniteElementSpace &l2_stress,
+                                             const Array<int> &ess_tdofs,
+                                             ParGridFunction &rho0_gf,
+                                             ParGridFunction &fictitious_rho0_gf,
+                                             ParGridFunction &gamma_gf,
+                                             const int source,
+                                             const bool visc,
+                                             const bool vort,
+                                             ParGridFunction &lambda_gf, ParGridFunction &mu_gf,
+                                             const Param &param, const double _vbc_max_val):                                    
    TimeDependentOperator(size),
    H1(h1), L2(l2), L2_stress(l2_stress), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -127,20 +119,24 @@ LagrangianGeoOperator::LagrangianGeoOperator(const int size,
    l2dofs_cnt(L2.GetFE(0)->GetDof()),
    l2_stress_dofs_cnt(L2_stress.GetFE(0)->GetDof()),
    h1dofs_cnt(H1.GetFE(0)->GetDof()),
-   source_type(source), cfl(cfl),
-   mass_scale(mscale), grav_mag(gravity), thickness(_thickness), winkler_rho(_winkler_rho), dyn_factor(_dyn_factor), vbc_max_val(_vbc_max_val),
-   use_viscosity(visc),
-   use_vorticity(vort),
-   p_assembly(p_assembly),
-   winkler_foundation(winkler_foundation),
-   dyn_damping(dyn_damping),
-   cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
    rho0_gf(rho0_gf),
    fictitious_rho0_gf(fictitious_rho0_gf),
    gamma_gf(gamma_gf),
+   source_type(source), 
+   use_viscosity(visc),
+   use_vorticity(vort),
    lambda_gf(lambda_gf),
    mu_gf(mu_gf),
-   bc_id_pa(_bc_id_pa),
+   cfl(param.solver.cfl),
+   p_assembly(param.solver.p_assembly),
+   cg_rel_tol(param.solver.cg_tol), cg_max_iter(param.solver.cg_max_iter),ftz_tol(param.solver.ftz_tol),
+   mass_scale(param.control.mscale), grav_mag(param.control.gravity), thickness(param.control.thickness), 
+   winkler_foundation(param.bc.winkler_foundation),
+   winkler_rho(param.bc.winkler_rho), 
+   dyn_damping(param.control.dyn_damping),
+   dyn_factor(param.control.dyn_factor), 
+   vbc_max_val(_vbc_max_val),
+   // bc_id_pa(_bc_id_pa),
    // tension_cutoff(_tension_cutoff.Size()),
    // cohesion(_cohesion.Size()),
    // friction_angle(_friction_angle.Size()),
@@ -152,7 +148,7 @@ LagrangianGeoOperator::LagrangianGeoOperator(const int size,
    rho0_coeff(&rho0_gf),
    scale_rho0_coeff(&fictitious_rho0_gf),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
-                   (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+                   (param.mesh.order_q > 0) ? param.mesh.order_q : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
@@ -186,9 +182,9 @@ LagrangianGeoOperator::LagrangianGeoOperator(const int size,
    // block_offsets[5] = block_offsets[4] + H1.GetVSize();
    one.UseDevice(true);
    one = 1.0;
-   qdata.mscale  = mscale;
+   qdata.mscale  = param.control.mscale;
    qdata.vbc_max_val  = vbc_max_val;
-   qdata.gravity = gravity;
+   qdata.gravity = param.control.gravity;
    qdata.h_est   = 1e+38;
 
    // for (int i = 0; i < pmesh->attributes.Max(); i++)
@@ -226,47 +222,83 @@ LagrangianGeoOperator::LagrangianGeoOperator(const int size,
       // we must enforce v_x/y/z = 0 for the velocity components.
       const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
       Array<int> ess_bdr(bdr_attr_max);
-   
-      for (int c = 0; c < dim; c++)
-      {
-         ess_bdr = 0;
 
-         if(dim == 2)
+      ess_bdr = 0;
+      switch (param.bc.vbc_x0)
+      {
+         case 0: // All velocity components free. Don't do anything.
+            break;
+         case 1: // Normal component fixed, shear components free"
+            ess_bdr[0] = 1; // x0's attribute is 1, so the 0-th element is set to 1.
+            break;
+         default:
+            std::cerr << "Unknown boundary condition for western boundary x0" << std::endl;
+      }
+      switch (param.bc.vbc_x1)
+      {
+         case 0: // All velocity components free. Don't do anything.
+            break;
+         case 1:
+            ess_bdr[1] = 1; // x1's attribute is 2, so the 1st element is set to 1.
+            break;
+         default:
+            std::cerr << "Unknown boundary condition for eastern boundary x1" << std::endl;
+      }
+      // Here we call GetEssentialVDofs() for 0-th component of velocity (i.e., vx).
+      {
+         H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[0]);
+         c_tdofs[0].Read();
+      }
+      ess_bdr = 0;
+      switch (param.bc.vbc_z0)
+      {
+         case 0: // All velocity components free. Don't do anything.
+            break;
+         case 1:
+            ess_bdr[2] = 1;  // y0's attribute is 3, so the 2nd element is set to 1.
+            break;
+         default:
+            std::cerr << "Unknown boundary condition for bottom boundary z0" << std::endl;
+      }
+      switch (param.bc.vbc_z1)
+      {
+         case 0: // All velocity components free. Don't do anything.
+            break;
+         case 1:
+            ess_bdr[3] = 1;  // y1's attribute is 4, so the 3rd element is set to 1.
+            break;
+         default:
+            std::cerr << "Unknown boundary condition for top boundary z1" << std::endl;
+      }
+      {
+         H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[1]);
+         c_tdofs[1].Read();
+      }
+      if( dim == 3 ) {
+         ess_bdr = 0;
+         switch (param.bc.vbc_y0)
          {
-            if(c == 0)
-            {
-               for (int i = 0; i < bc_id_pa.Size(); ++i) {if(bc_id_pa[i]==1 || bc_id_pa[i]==3){ess_bdr[i] = 1;}}
-               H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-               c_tdofs[c].Read();
-            }
-            else if(c == 1)
-            {
-               for (int i = 0; i < bc_id_pa.Size(); ++i) {if(bc_id_pa[i]==2 || bc_id_pa[i]==3){ess_bdr[i] = 1;}}
-               H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-               c_tdofs[c].Read();
-            }
+            case 0: // All velocity components free. Don't do anything.
+               break;
+            case 1:
+               ess_bdr[4] = 1;  // y0's attribute is 5, so the 4th element is set to 1.
+               break;
+            default:
+               std::cerr << "Unknown boundary condition for northern boundary y0" << std::endl;
          }
-         else
+         switch (param.bc.vbc_y1)
          {
-            if(c == 0)
-            {
-               for (int i = 0; i < bc_id_pa.Size(); ++i) {if(bc_id_pa[i]==1 || bc_id_pa[i]==4 || bc_id_pa[i]==5 || bc_id_pa[i]==6){ess_bdr[i] = 1;}}
-               H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-               c_tdofs[c].Read();
-            }
-            else if(c == 1)
-            {
-               for (int i = 0; i < bc_id_pa.Size(); ++i) {if(bc_id_pa[i]==2 || bc_id_pa[i]==4 || bc_id_pa[i]==5 || bc_id_pa[i]==7){ess_bdr[i] = 1;}}
-               H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-               c_tdofs[c].Read();
-            }
-            else
-            {
-               for (int i = 0; i < bc_id_pa.Size(); ++i) {if(bc_id_pa[i]==3 || bc_id_pa[i]==4 || bc_id_pa[i]==6 || bc_id_pa[i]==7){ess_bdr[i] = 1;}}
-               H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-               c_tdofs[c].Read();
-            }
-            
+            case 0: // All velocity components free. Don't do anything.
+               break;
+            case 1:
+               ess_bdr[5] = 1;  // z1's attribute is 6, so the 5th element is set to 1.
+               break;
+            default:
+               std::cerr << "Unknown boundary condition for southern boundary y1" << std::endl;
+         }
+         {
+            H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[2]);
+            c_tdofs[2].Read();
          }
       }
       

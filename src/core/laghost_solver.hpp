@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghost_assembly.hpp"
+#include "laghost_parameters.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -248,7 +249,7 @@ protected:
    void AssembleSigmaMatrix() const;
 
 public:
-   LagrangianGeoOperator(const int size,
+   LagrangianGeoOperator(  const int size,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            ParFiniteElementSpace &l2_stress_fes,
@@ -259,14 +260,11 @@ public:
                            ParGridFunction &fictitious_rho0_gf,
                            ParGridFunction &gamma_gf,
                            const int source,
-                           const double cfl,
-                           const bool visc, const bool vort, const bool pa,
-                           const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q,
-                           ParGridFunction &lambda_gf, ParGridFunction &mu_gf, double mscale, const double gravity, const double _thickness,
-                           const bool winkler, const double _winkler_rho, const bool dyn_damping, const double _dyn_factor, Vector _bc_id_pa, const double _vbc_max_val);
+                           const bool visc, const bool vort, 
+                           ParGridFunction &lambda_gf, ParGridFunction &mu_gf,
+                           const Param &param, 
+                           const double _vbc_max_val);
    ~LagrangianGeoOperator();
-
 
    // Solve for dx_dt, dv_dt and de_dt.
    virtual void Mult(const Vector &S, Vector &dS_dt) const;
