@@ -154,16 +154,11 @@ jobs:
         wget -q https://github.com/hypre-space/hypre/archive/v2.28.0.tar.gz
         tar -xzf v2.28.0.tar.gz
         cd hypre-2.28.0/src
-        ./configure --disable-fortran --without-fei --enable-shared
+        ./configure --disable-fortran
         make -j2
         cd ../..
         # Create proper directory structure for MFEM
         ln -sf hypre-2.28.0/src hypre
-        # MFEM expects headers in hypre/include, but they're in hypre/hypre/include
-        mkdir -p hypre/include
-        cp -r hypre-2.28.0/src/hypre/include/* hypre/include/
-        mkdir -p hypre/lib
-        cp hypre-2.28.0/src/hypre/lib/* hypre/lib/ 2>/dev/null || true
         # Build METIS
         echo "Building METIS..."
         wget -q https://github.com/mfem/tpls/raw/gh-pages/metis-4.0.3.tar.gz

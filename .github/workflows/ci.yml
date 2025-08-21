@@ -54,13 +54,6 @@ jobs:
         cd ../..
         # Create proper directory structure for MFEM
         ln -sf hypre-2.28.0/src hypre
-        # MFEM expects headers in hypre/include, but they're in hypre/hypre/include
-        # Create the expected include directory structure
-        mkdir -p hypre/include
-        cp -r hypre-2.28.0/src/hypre/include/* hypre/include/
-        # Also need the lib directory
-        mkdir -p hypre/lib
-        cp hypre-2.28.0/src/hypre/lib/* hypre/lib/ 2>/dev/null || true
         
     - name: Download and build METIS
       run: |
