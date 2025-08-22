@@ -8,6 +8,7 @@
 
 [![Unit Tests](https://github.com/GeoFLAC/Laghost/workflows/Unit%20Tests/badge.svg)](https://github.com/GeoFLAC/Laghost/actions?query=workflow%3A%22Unit+Tests%22)
 [![CI](https://github.com/GeoFLAC/Laghost/workflows/Laghost%20CI/badge.svg)](https://github.com/GeoFLAC/Laghost/actions?query=workflow%3A%22Laghost+CI%22)
+[![CI Fast](https://github.com/GeoFLAC/Laghost/workflows/Laghost%20CI%20-%20Fast/badge.svg)](https://github.com/GeoFLAC/Laghost/actions?query=workflow%3A%22Laghost+CI+-+Fast%22)
 [![Comprehensive CI](https://github.com/GeoFLAC/Laghost/workflows/Comprehensive%20CI/badge.svg)](https://github.com/GeoFLAC/Laghost/actions?query=workflow%3A%22Comprehensive+CI%22)
 
 ## Purpose
