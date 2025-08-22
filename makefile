@@ -137,7 +137,7 @@ $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
 
 # Quick test with specific execution options
 MFEM_TESTS = laghost
-RUN_MPI_4 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 4
+RUN_MPI_4 = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) 2
 test: laghost
 	@$(call mfem-test,$<, $(RUN_MPI_4), Laghost miniapp,\
 	-p 0 -m data/meshes/square01_quad.mesh -rs 3 -tf 0.1)
