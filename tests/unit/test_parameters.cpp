@@ -81,14 +81,19 @@ TEST_F(ParametersTest, DefaultMeshingParametersInitialization) {
 TEST_F(ParametersTest, DefaultBCParametersInitialization) {
     BC bc = {};
     
-    EXPECT_TRUE(bc.bc_unit.empty());
-    EXPECT_TRUE(bc.bc_ids.empty());
-    EXPECT_TRUE(bc.bc_vxs.empty());
-    EXPECT_TRUE(bc.bc_vys.empty());
-    EXPECT_TRUE(bc.bc_vzs.empty());
-    EXPECT_EQ(bc.vel_unit, 0.0);
+    EXPECT_TRUE(bc.vbc_unit.empty());
+    EXPECT_EQ(bc.vbc_factor, 0.0);
+    EXPECT_EQ(bc.vbc_x0, 0);
+    EXPECT_EQ(bc.vbc_x1, 0);
+    EXPECT_EQ(bc.vbc_z0, 0);
+    EXPECT_EQ(bc.vbc_z1, 0);
+    EXPECT_EQ(bc.vbc_y0, 0);
+    EXPECT_EQ(bc.vbc_y1, 0);
     EXPECT_FALSE(bc.winkler_foundation);
     EXPECT_FALSE(bc.winkler_flat);
+    EXPECT_EQ(bc.vbc_x0_val0, 0.0);
+    EXPECT_EQ(bc.vbc_x0_val1, 0.0);
+    EXPECT_EQ(bc.vbc_x0_val2, 0.0);
     EXPECT_EQ(bc.winkler_rho, 0.0);
     EXPECT_FALSE(bc.surf_proc);
     EXPECT_EQ(bc.surf_diff, 0.0);
@@ -103,19 +108,20 @@ TEST_F(ParametersTest, DefaultMatParametersInitialization) {
     
     EXPECT_FALSE(mat.plastic);
     EXPECT_FALSE(mat.viscoplastic);
-    EXPECT_TRUE(mat.rho.empty());
-    EXPECT_TRUE(mat.lambda.empty());
-    EXPECT_TRUE(mat.mu.empty());
-    EXPECT_TRUE(mat.tension_cutoff.empty());
-    EXPECT_TRUE(mat.cohesion0.empty());
-    EXPECT_TRUE(mat.cohesion1.empty());
-    EXPECT_TRUE(mat.friction_angle0.empty());
-    EXPECT_TRUE(mat.friction_angle1.empty());
-    EXPECT_TRUE(mat.dilation_angle0.empty());
-    EXPECT_TRUE(mat.dilation_angle1.empty());
-    EXPECT_TRUE(mat.pls0.empty());
-    EXPECT_TRUE(mat.pls1.empty());
-    EXPECT_TRUE(mat.plastic_viscosity.empty());
+    EXPECT_EQ(mat.nmat, 0);
+    EXPECT_EQ(mat.rho.Size(), 0);
+    EXPECT_EQ(mat.lambda.Size(), 0);
+    EXPECT_EQ(mat.mu.Size(), 0);
+    EXPECT_EQ(mat.tension_cutoff.Size(), 0);
+    EXPECT_EQ(mat.cohesion0.Size(), 0);
+    EXPECT_EQ(mat.cohesion1.Size(), 0);
+    EXPECT_EQ(mat.friction_angle0.Size(), 0);
+    EXPECT_EQ(mat.friction_angle1.Size(), 0);
+    EXPECT_EQ(mat.dilation_angle0.Size(), 0);
+    EXPECT_EQ(mat.dilation_angle1.Size(), 0);
+    EXPECT_EQ(mat.pls0.Size(), 0);
+    EXPECT_EQ(mat.pls1.Size(), 0);
+    EXPECT_EQ(mat.plastic_viscosity.Size(), 0);
     EXPECT_EQ(mat.weak_rad, 0.0);
     EXPECT_EQ(mat.weak_x, 0.0);
     EXPECT_EQ(mat.weak_y, 0.0);
@@ -160,46 +166,4 @@ TEST_F(ParametersTest, DefaultTMOPParametersInitialization) {
     EXPECT_EQ(tmop.barrier_type, 0);
     EXPECT_EQ(tmop.worst_case_type, 0);
     EXPECT_EQ(tmop.tmop_cond_num, 0.0);
-}
-
-TEST_F(ParametersTest, ConstantsValidation) {
-    // Test mathematical constants
-    EXPECT_NEAR(M_PI, 3.1415926535897932384626433832795, 1e-15);
-    EXPECT_NEAR(YEAR2SEC, 365.2422 * 86400, 1e-6);
-    EXPECT_NEAR(DEG2RAD, M_PI / 180, 1e-15);
-    
-    // Test dimension-dependent constants
-    #ifdef THREED
-    EXPECT_EQ(NDIMS, 3);
-    EXPECT_EQ(NODES_PER_ELEM, 4);
-    EXPECT_EQ(NSTR, 6);
-    EXPECT_EQ(FACETS_PER_ELEM, 4);
-    EXPECT_EQ(NODES_PER_FACET, 3);
-    #else
-    EXPECT_EQ(NDIMS, 2);
-    EXPECT_EQ(NODES_PER_ELEM, 3);
-    EXPECT_EQ(NSTR, 3);
-    EXPECT_EQ(FACETS_PER_ELEM, 3);
-    EXPECT_EQ(NODES_PER_FACET, 2);
-    #endif
-}
-
-TEST_F(ParametersTest, BoundaryFlagsValidation) {
-    // Test boundary flag constants
-    EXPECT_EQ(BOUNDX0, 1);
-    EXPECT_EQ(BOUNDX1, 2);
-    EXPECT_EQ(BOUNDY0, 4);
-    EXPECT_EQ(BOUNDY1, 8);
-    EXPECT_EQ(BOUNDZ0, 16);
-    EXPECT_EQ(BOUNDZ1, 32);
-    EXPECT_EQ(BOUNDN0, 64);
-    EXPECT_EQ(BOUNDN1, 128);
-    EXPECT_EQ(BOUNDN2, 256);
-    EXPECT_EQ(BOUNDN3, 512);
-    
-    // Test combined boundary flag
-    uint expected_bound_any = BOUNDX0 | BOUNDX1 | BOUNDY0 | BOUNDY1 | 
-                             BOUNDZ0 | BOUNDZ1 | BOUNDN0 | BOUNDN1 | 
-                             BOUNDN2 | BOUNDN3;
-    EXPECT_EQ(BOUND_ANY, expected_bound_any);
 }

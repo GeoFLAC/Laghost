@@ -63,8 +63,10 @@ local_refinement = false
 l2_basis = 1
 
 [bc]
-bc_unit = cm/yr
-bc_ids = [1,1,0,0]
+vbc_unit = cm/yr
+vbc_factor = 1.0
+vbc_x0 = 1
+vbc_x1 = 1
 winkler_foundation = true
 winkler_flat = false
 winkler_rho = 2700.0
@@ -180,11 +182,12 @@ TEST_F(InputTest, InvalidConfigFile) {
     
     OptionsParser args(argc, const_cast<char**>(argv));
     
-    // Should handle missing file gracefully or throw appropriate exception
-    // The exact behavior depends on implementation
-    EXPECT_NO_THROW({
+    // The function calls exit(1) when config file is not found
+    // In a test environment, we expect this to cause the program to exit
+    // This test documents the current behavior - when file is missing, program exits
+    EXPECT_EXIT({
         read_and_assign_input_parameters(args, param, 0);
-    });
+    }, ::testing::ExitedWithCode(1), ".*can not read options configuration file.*");
 }
 
 TEST_F(InputTest, CommandLineOverrides) {
