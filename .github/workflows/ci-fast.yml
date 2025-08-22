@@ -63,7 +63,7 @@ jobs:
         ./configure --disable-fortran --without-fei --enable-shared
         make -j2
         cd ../..
-        ln -sf hypre-2.28.0/src hypre
+        ln -sf hypre-2.28.0 hypre
         
         # Build METIS
         echo "Building METIS..."
