@@ -154,6 +154,7 @@ git clone https://github.com/mfem/mfem.git
 
 hypre is expected to be on the same level as the `Laghost` directory: e.g.,
 
+**Option 1: From Git Repository**
 ```sh
 $ ls
 mfem
@@ -164,6 +165,25 @@ $ cd hypre/src
 $ ./configure --disable-fortran
 $ make -j
 ```
+
+**Option 2: From Tarball**
+```sh
+$ ls
+mfem
+$ wget https://github.com/hypre-space/hypre/archive/v2.28.0.tar.gz
+$ tar -xzf v2.28.0.tar.gz
+$ ls
+hypre-2.28.0  mfem  v2.28.0.tar.gz
+$ cd hypre-2.28.0/src
+$ ./configure --disable-fortran
+$ make -j
+$ cd ../..
+$ ln -sf hypre-2.28.0 hypre
+$ ls
+hypre  hypre-2.28.0  mfem  v2.28.0.tar.gz
+```
+
+After building, ensure the `hypre` symbolic link points to the source directory so MFEM can find it.
 
 #### Build METIS
 
