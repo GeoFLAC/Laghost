@@ -49,7 +49,7 @@ jobs:
         tar -xzf v2.28.0.tar.gz
         cd hypre-2.28.0/src
         echo "Building HYPRE..."
-        ./configure --disable-fortran --without-fei --enable-shared
+        ./configure --disable-fortran
         make -j2
         cd ../..
         # Create proper directory structure for MFEM
