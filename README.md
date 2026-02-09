@@ -91,7 +91,8 @@ Other computational motives in Laghost include the following:
 - Remapping high-order continuous (velocity and mesh nodes) and discontinous variables (energy, stress, composition, plastic strain) 
   from source mesh (before remeshing) to new mesh (after remeshing) 
   using [GSLIB](https://mfem.org/howto/findpts/) and [Remhos](https://github.com/CEED/Remhos).
-- Input file system (default.cfg) based on boost library (1.42 or newer version).
+- TOML configuration file system using [CLI11](https://github.com/CLIUtils/CLI11) (header-only, no external dependencies).
+- Modular constitutive model framework with abstract `ConstitutiveModel` interface for extensibility.
 
 ## Main Code Structure
 
@@ -136,8 +137,8 @@ Laghost has these additional dependencies:
 -  GSLIb, used for remeshing. See below
 -  MFEM, core library for arbitrary-order finite elements<br>
    https://github.com/mfem/mfem
--  boost-program-options, used for input file system<br>
-   https://www.boost.org/
+-  CLI11 (included as header-only in `src/extern/`)<br>
+   https://github.com/CLIUtils/CLI11
 
 The MFEM library has a serial and an MPI-based parallel version, which largely
 share the same code base. The only prerequisite for building the serial version
@@ -256,21 +257,6 @@ $ make pcuda -j MFEM_USE_GSLIB=YES MFEM_USE_METIS_5=NO
 The above uses the `master` branch of MFEM.
 See the [MFEM building page](http://mfem.org/building/) for additional details.
 
-### Install boost:
-
-```sh
-apt install libboost-program-options-dev
-```
-
-Or download a release package and install it locally: e.g.,
-
-```sh
-$ tar xzvf boost_1_88_0.tar.gz
-$ cd boost_1_88_0
-$ ./bootstrap.sh
-$ ./b2 --with-program_options -q
-```
-
 ### Clone Laghost
 
 ```sh
@@ -284,12 +270,6 @@ Laghost  gslib-1.0.9  gslib  hypre  metis-4.0  mfem  mfem-tpls
 ```sh
 $ cd Laghost/
 $ make -j
-```
-
-If `libboost-program-options.so` is locally installed, specify its location as follows:
-
-```sh
-make -j PROGRAMOPTIONS_LIBDIR=../boost_1_88_0/stage/lib
 ```
 
 <!-- This can be followed by `make test` and `make install` to check and install the
