@@ -201,11 +201,11 @@ From [mfem INSTALL document](https://github.com/mfem/mfem/blob/master/INSTALL):
   ```sh
   $ ls
   hypre  mfem
-  $ git https://github.com/mfem/tpls.git mfem-tpls
+  $ git clone https://github.com/mfem/tpls.git mfem-tpls
   $ ls
   hypre  mfem  mfem-tpls
   $ cd mfem-tpls
-  $ tar -zxvf metis-4.0.3.tar.gz
+  $ tar zxvf metis-4.0.3.tar.gz
   $ cd metis-4.0.3
   $ make OPTFLAGS=-Wno-error=implicit-function-declaration
   $ cd ../..

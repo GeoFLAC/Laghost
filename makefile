@@ -114,8 +114,9 @@ CORE_SOURCES = $(wildcard src/core/*.cpp)
 PHYSICS_SOURCES = $(wildcard src/physics/*.cpp)
 IO_SOURCES = $(wildcard src/io/*.cpp)
 REMHOS_SOURCES = $(wildcard src/remhos/*.cpp)
+RHEOLOGY_SOURCES = $(wildcard src/rheology/*.cpp) $(wildcard src/rheology/*/*.cpp)
 
-SOURCE_FILES = $(MAIN_SOURCES) $(CORE_SOURCES) $(PHYSICS_SOURCES) $(IO_SOURCES) $(REMHOS_SOURCES)
+SOURCE_FILES = $(MAIN_SOURCES) $(CORE_SOURCES) $(PHYSICS_SOURCES) $(IO_SOURCES) $(REMHOS_SOURCES) $(RHEOLOGY_SOURCES)
 HEADER_FILES = $(wildcard src/*/*.hpp)
 OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 
