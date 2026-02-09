@@ -39,8 +39,6 @@ p_assembly = false
 impose_visc = true
 
 [control]
-pseudo_transient = false
-transient_num = 5
 lithostatic = true
 init_dt = 1.0
 mscale = 1.0e6

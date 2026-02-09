@@ -228,8 +228,6 @@ static void get_input_parameters(const char* filename, Param& p)
     app.add_option("solver.impose_visc", p.solver.impose_visc)->default_val(true);
     
     // ========== [control] section ==========
-    app.add_option("control.pseudo_transient", p.control.pseudo_transient)->default_val(false);
-    app.add_option("control.transient_num", p.control.transient_num)->default_val(5);
     app.add_option("control.lithostatic", p.control.lithostatic)->default_val(true);
     app.add_option("control.atmospheric", p.control.atmospheric)->default_val(false);
     app.add_option("control.init_dt", p.control.init_dt)->default_val(1.0);

@@ -51,8 +51,6 @@ TEST_F(ParametersTest, DefaultSolverParametersInitialization) {
 TEST_F(ParametersTest, DefaultControlParametersInitialization) {
     Control control = {};
     
-    EXPECT_FALSE(control.pseudo_transient);
-    EXPECT_EQ(control.transient_num, 0);
     EXPECT_FALSE(control.lithostatic);
     EXPECT_EQ(control.init_dt, 0.0);
     EXPECT_EQ(control.mscale, 0.0);

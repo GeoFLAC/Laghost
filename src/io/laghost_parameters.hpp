@@ -40,8 +40,6 @@ struct SolverParams {
 };
 
 struct Control {
-    bool   pseudo_transient;
-    int    transient_num;
     // double flat_rate;
     bool   lithostatic;
     bool   atmospheric;

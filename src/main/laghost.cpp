@@ -1253,22 +1253,7 @@ int main(int argc, char *argv[])
       // ParSubMesh::Transfer(x_ini_gf, x0_side);
       // ParSubMesh::Transfer(x_ini_gf, x1_side);
 
-      if(param.control.pseudo_transient)
-      {
-         for (int i = 0; i < param.control.transient_num; i++)
-         {
-            x_gf = x_old_gf; // back to orignal mesh to fix mesh during pseudo transient loop
-            s_gf = s_old_gf; // 
-            // e_gf = e_old_gf; // 
-
-            ode_solver->Step(S, t, dt);
-         }
-         t = t - dt*(param.control.transient_num-1.0);
-      }
-      else
-      {
-         ode_solver->Step(S, t, dt);
-      }
+      ode_solver->Step(S, t, dt);
 
       // // Keep the domain size for ALE
       // ParSubMesh::Transfer(x0_side, x_gf);
