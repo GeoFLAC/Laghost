@@ -104,9 +104,8 @@ EXTRA_INC_DIR = $(or $(wildcard $(MFEM_DIR)/include/mfem),$(MFEM_DIR))
 CCC = $(strip $(CXX) $(LAGHOST_FLAGS) $(if $(EXTRA_INC_DIR),-I$(EXTRA_INC_DIR)) -Isrc)
 
 LAGHOST_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
-PROGRAMOPTIONS_LIBDIR = /usr/lib/x86_64-linux-gnu
-PROGRAMOPTIONS_LIBS = -Wl,-rpath=$(PROGRAMOPTIONS_LIBDIR) -L$(PROGRAMOPTIONS_LIBDIR) -lboost_program_options
-LIBS = $(strip $(LAGHOST_LIBS) $(LDFLAGS) $(PROGRAMOPTIONS_LIBS))
+# CLI11 is header-only, no additional linking required
+LIBS = $(strip $(LAGHOST_LIBS) $(LDFLAGS))
 
 # Source files in new directory structure
 MAIN_SOURCES = src/main/laghost.cpp
