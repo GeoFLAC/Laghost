@@ -434,14 +434,14 @@ static void declare_parameters(po::options_description &cfg,
         ("mat.friction_angle1", po::value<std::string>()->default_value("[30.0]"),"Material indicators '[d0, d1, d2, ...]")
         ("mat.dilation_angle0", po::value<std::string>()->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
         ("mat.dilation_angle1", po::value<std::string>()->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.pls0", po::value<std::string>()->default_value("[0.0]"),"Material indicators '[d0, d1, d2, ...]")
-        ("mat.pls1", po::value<std::string>()->default_value("[0.5]"),"Material indicators '[d0, d1, d2, ...]")
+        ("mat.alpha0", po::value<std::string>()->default_value("[0.0]"),"Internal variable at start of weakening '[d0, d1, d2, ...]")
+        ("mat.alpha1", po::value<std::string>()->default_value("[0.5]"),"Internal variable at end of weakening '[d0, d1, d2, ...]")
         ("mat.plastic_viscosity", po::value<std::string>()->default_value("[1.0e+300]"),"Material indicators '[d0, d1, d2, ...]")
         ("mat.weak_rad", po::value<double>(&p.mat.weak_rad)->default_value(1.0e3), "circular weakzone")//
         ("mat.weak_x", po::value<double>(&p.mat.weak_x)->default_value(50.0e3), " x coord of circular")//
         ("mat.weak_y", po::value<double>(&p.mat.weak_y)->default_value(2.0e3), "y coord of circular")  //
         ("mat.weak_z", po::value<double>(&p.mat.weak_z)->default_value(0.0), "z coord of circular")    //
-        ("mat.ini_pls", po::value<double>(&p.mat.ini_pls)->default_value(0.5), "initial plasticity")   //
+        ("mat.ini_alpha", po::value<double>(&p.mat.ini_alpha)->default_value(0.5), "initial internal variable (accumulated plastic strain)")   //
         ;
     cfg.add_options()
         ("tmop.tmop", po::value<bool>(&p.tmop.tmop)->default_value(false), " ")
@@ -634,8 +634,8 @@ static void validate_parameters(const po::variables_map &vm, Param &p)
         get_numbers<double>(vm, "mat.friction_angle1", p.mat.friction_angle1, p.mat.nmat);
         get_numbers<double>(vm, "mat.dilation_angle0", p.mat.dilation_angle0, p.mat.nmat);
         get_numbers<double>(vm, "mat.dilation_angle1", p.mat.dilation_angle1, p.mat.nmat);
-        get_numbers<double>(vm, "mat.pls0", p.mat.pls0, p.mat.nmat);
-        get_numbers<double>(vm, "mat.pls1", p.mat.pls1, p.mat.nmat);
+        get_numbers<double>(vm, "mat.alpha0", p.mat.alpha0, p.mat.nmat);
+        get_numbers<double>(vm, "mat.alpha1", p.mat.alpha1, p.mat.nmat);
         get_numbers<double>(vm, "mat.plastic_viscosity", p.mat.plastic_viscosity, p.mat.nmat);
     }
 }

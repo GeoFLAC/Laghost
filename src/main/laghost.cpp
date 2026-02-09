@@ -892,7 +892,7 @@ int main(int argc, char *argv[])
 
    // Initialize the velocity.
    v_gf = 0.0;
-   // PlasticCoefficient p_coeff(dim, xyz_gf_l2, weak_location, param.mat.weak_rad, param.mat.ini_pls);
+   // PlasticCoefficient p_coeff(dim, xyz_gf_l2, weak_location, param.mat.weak_rad, param.mat.ini_alpha);
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), initial_velocity);
    // In case velocity is needed at quadrature points or for an integrated quantity over an element.
    v_gf.ProjectCoefficient(v_coeff);
@@ -1046,7 +1046,7 @@ int main(int argc, char *argv[])
    ini_weakzone[pmesh->attributes.Max()-1] = 0.5;
    PWConstCoefficient weak_func(ini_weakzone);
 
-   PlasticCoefficient p_coeff(dim, xyz_gf_l2, weak_location, param.mat.weak_rad, param.mat.ini_pls);
+   PlasticCoefficient p_coeff(dim, xyz_gf_l2, weak_location, param.mat.weak_rad, param.mat.ini_alpha);
    // p_gf.ProjectCoefficient(p_coeff);
    // // interpolation using non-basis function
    ParGridFunction l2_p_gf(&L2FESpace_positive);
@@ -1121,8 +1121,8 @@ int main(int argc, char *argv[])
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &e_gf);
       visit_dc.RegisterField("Stress", &s_gf);
-      visit_dc.RegisterField("Plastic Strain", &p_gf);
-      visit_dc.RegisterField("Non-inital Plastic Strain", &n_p_gf);
+      visit_dc.RegisterField("Accumulated Plastic Strain", &p_gf);
+      visit_dc.RegisterField("Non-initial Accumulated Plastic Strain", &n_p_gf);
       // visit_dc.RegisterField("Geometric Parameters", &quality);
       visit_dc.RegisterField("Composition", &comp_gf);
       visit_dc.RegisterField("Lambda", &lambda0_gf);
@@ -1142,9 +1142,9 @@ int main(int argc, char *argv[])
       pd->RegisterField("Velocity", &v_gf);
       pd->RegisterField("Specific Internal Energy", &e_gf);
       pd->RegisterField("Stress", &s_gf);
-      pd->RegisterField("Plastic Strain", &p_gf);
-      pd->RegisterField("inital Plastic Strain", &ini_p_gf);
-      pd->RegisterField("Non-inital Plastic Strain", &n_p_gf);
+      pd->RegisterField("Accumulated Plastic Strain", &p_gf);
+      pd->RegisterField("Initial Accumulated Plastic Strain", &ini_p_gf);
+      pd->RegisterField("Non-initial Accumulated Plastic Strain", &n_p_gf);
       pd->RegisterField("Geometric Parameters", &quality);
       pd->RegisterField("Composition", &comp_gf);
       pd->RegisterField("Lambda", &lambda0_gf);

@@ -123,7 +123,7 @@ struct Mat {
     // std::string weak_x;
     // std::string weak_y;
     // std::string weak_z;
-    // std::string ini_pls;
+    // std::string ini_alpha;
     mfem::Vector tension_cutoff;
     mfem::Vector cohesion0;
     mfem::Vector cohesion1;
@@ -131,8 +131,8 @@ struct Mat {
     mfem::Vector friction_angle1;
     mfem::Vector dilation_angle0;
     mfem::Vector dilation_angle1;
-    mfem::Vector pls0;
-    mfem::Vector pls1;
+    mfem::Vector alpha0;  // Internal variable at start of weakening
+    mfem::Vector alpha1;  // Internal variable at end of weakening
     mfem::Vector plastic_viscosity;
 
     // double lambda;
@@ -141,14 +141,14 @@ struct Mat {
     double weak_x;
     double weak_y;
     double weak_z;
-    double ini_pls;
+    double ini_alpha;  // Initial internal variable value
     // double tension_cutoff;
     // double cohesion0;
     // double cohesion1;
     // double friction_angle;
     // double dilation_angle;
-    // double pls0;
-    // double pls1;
+    // double alpha0;
+    // double alpha1;
     // double plastic_viscosity;
 };
 

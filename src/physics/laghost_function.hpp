@@ -55,13 +55,13 @@ namespace mfem
       ParGridFunction &xyz;
       int dim;
       Vector location;
-      double rad, ini_pls;
+      double rad, ini_alpha;  // Initial accumulated plastic strain
 
    public:
-      PlasticCoefficient (int &_dim, ParGridFunction &_xyz, Vector &_location, double &_rad, double &_ini_pls)
+      PlasticCoefficient (int &_dim, ParGridFunction &_xyz, Vector &_location, double &_rad, double &_ini_alpha)
          : VectorCoefficient(1), xyz(_xyz)
          {
-            dim=_dim; location = _location; rad = _rad; ini_pls = _ini_pls;
+            dim=_dim; location = _location; rad = _rad; ini_alpha = _ini_alpha;
          }
       virtual void Eval(Vector &K, ElementTransformation &T, const IntegrationPoint &ip)
       {
@@ -83,7 +83,7 @@ namespace mfem
 
          if(r <= rad)
          {
-            K(0) = ini_pls;
+            K(0) = ini_alpha;
          }
          else
          {

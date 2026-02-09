@@ -18,8 +18,8 @@ namespace mfem
       Vector friction_angle1 = param.mat.friction_angle1;
       Vector dilation_angle0 = param.mat.dilation_angle0;
       Vector dilation_angle1 = param.mat.dilation_angle1;
-      Vector pls0 = param.mat.pls0;
-      Vector pls1 = param.mat.pls1;
+      Vector alpha0 = param.mat.alpha0;  // Internal variable at start of weakening
+      Vector alpha1 = param.mat.alpha1;  // Internal variable at end of weakening
       Vector plastic_viscosity = param.mat.plastic_viscosity;
       bool viscoplastic = param.mat.viscoplastic;
       
@@ -41,7 +41,7 @@ namespace mfem
             double msig{0.0}; // mean stress
             double evol{0.0}; // volumetric strain
             double DEG2RAD{M_PI/180.0};
-            double depls{0.0}; // 2nd invariant of plastic strain
+            double dalpha{0.0}; // 2nd invariant of plastic strain (increment)
 
             double fs{0.0};
             double ft{0.0};
@@ -56,7 +56,7 @@ namespace mfem
             double dt_scaled{0.0};
             double numerator   = {0.0};
             double denominator = {0.0};
-            double pls_old = {0.0}; // cumulative 2nd invariant of plastic strain
+            double alpha = {0.0}; // accumulated plastic strain (internal variable)
             double p_slope = {0.0}; 
             double fri_str = {0.0}; // strain_dependent friction angle
             double dil_str = {0.0}; // strain_dependent dilation angle
@@ -68,8 +68,8 @@ namespace mfem
             // bool viscoplastic = true;
             // bool viscoplastic = false;
 
-            double pls0_c = {0.0}; 
-            double pls1_c = {0.0}; 
+            double alpha0_c = {0.0}; 
+            double alpha1_c = {0.0}; 
             double rho_c = {0.0}; 
             double lambda_c = {0.0}; 
             double mu_c = {0.0}; 
@@ -91,16 +91,16 @@ namespace mfem
                   double eig_sig_var[3], eig_sig_vec[9];
 
                   // mat = mat_gf[i];
-                  pls_old = p_gf[i];
-                  if(pls_old < 0.0){pls_old =0.0; p_gf[i] = 0.0;}
+                  alpha = p_gf[i];
+                  if(alpha < 0.0){alpha =0.0; p_gf[i] = 0.0;}
 
-                  pls0_c =0.0; pls1_c =0.0; rho_c = 0.0; lambda_c = 0.0; mu_c = 0.0; time_scale = 1.0;
+                  alpha0_c =0.0; alpha1_c =0.0; rho_c = 0.0; lambda_c = 0.0; mu_c = 0.0; time_scale = 1.0;
                   tension_cutoff_c = 0.0; cohesion0_c = 0.0; cohesion1_c = 0.0; friction_angle0_c = 0.0; friction_angle1_c = 0.0;
                   dilation_angle0_c = 0.0; dilation_angle1_c = 0.0; plastic_viscosity_c = 0.0;
                   for( int ii = 0; ii < mat_num; ii++ )
                   {
-                     pls0_c = pls0_c + comp_gf[i+nsize*ii]*pls0[ii];
-                     pls1_c = pls1_c + comp_gf[i+nsize*ii]*pls1[ii];
+                     alpha0_c = alpha0_c + comp_gf[i+nsize*ii]*alpha0[ii];
+                     alpha1_c = alpha1_c + comp_gf[i+nsize*ii]*alpha1[ii];
                      rho_c = rho_c + comp_gf[i+nsize*ii]*rho[ii];
                      lambda_c = lambda_c + comp_gf[i+nsize*ii]*lambda[ii];
                      mu_c = mu_c + comp_gf[i+nsize*ii]*mu[ii];
@@ -114,7 +114,7 @@ namespace mfem
                      // plastic_viscosity_c = plastic_viscosity_c + comp_gf[i+nsize*ii]*plastic_viscosity[ii];
                   }
                   // linear weakening
-                  p_slope = (pls_old - pls0_c)/(pls1_c - pls0_c);
+                  p_slope = (alpha - alpha0_c)/(alpha1_c - alpha0_c);
                   pwave_speed = sqrt((lambda_c + 2*mu_c)/rho_c);
                   if(h_min  > 0){time_scale = h_min / pwave_speed;}
                   plastic_viscosity_c = time_scale * mu_c;
@@ -178,13 +178,13 @@ namespace mfem
                   // linear strain weaking on cohesion, friction and dilation angles.
                   coh_str = cohesion0_c; fri_str = friction_angle0_c; dil_str = dilation_angle0_c;
 
-                  if (pls_old < pls0_c) {
+                  if (alpha < alpha0_c) {
                      // no weakening yet
                      coh_str = cohesion0_c;
                      fri_str = friction_angle0_c;
                      dil_str = dilation_angle0_c;
                   }
-                  else if (pls_old < pls1_c) {
+                  else if (alpha < alpha1_c) {
                      // linear weakening
                      coh_str = cohesion0_c + p_slope * (cohesion1_c - cohesion0_c);
                      fri_str = friction_angle0_c + p_slope * (friction_angle1_c - friction_angle0_c);
@@ -213,7 +213,7 @@ namespace mfem
                   // bisects the obtuse angle made by two yield function
                   fh = sig3 - ten_cut + (sqrt(N_phi*N_phi + 1.0)+ N_phi)*(sig1 - N_phi*ten_cut + 2*coh_str*st_N_phi);
 
-                  depls = 0.0;
+                  dalpha = 0.0;
                         
                   if(fs < 0 & fh < 0) // stress correction at shear failure
                   {
@@ -227,13 +227,13 @@ namespace mfem
                      // reduced form of 2nd invariant
                      if(dim ==2)
                      {
-                        depls = std::fabs(beta) * std::sqrt((3 - 2*N_psi + 3*N_psi*N_psi) / 8); 
-                        // depls = std::fabs(alam) * std::sqrt((3 + 2*anpsi + 3*anpsi*anpsi) / 8);
+                        dalpha = std::fabs(beta) * std::sqrt((3 - 2*N_psi + 3*N_psi*N_psi) / 8); 
+                        // dalpha = std::fabs(alam) * std::sqrt((3 + 2*anpsi + 3*anpsi*anpsi) / 8);
                      }
                      else
                      {
-                        depls = std::fabs(beta) * std::sqrt((7 - 4*N_psi + 7*N_psi*N_psi) / 18);
-                        // depls = std::fabs(alam) * std::sqrt((7 + 4*anpsi + 7*anpsi*anpsi) / 18);
+                        dalpha = std::fabs(beta) * std::sqrt((7 - 4*N_psi + 7*N_psi*N_psi) / 18);
+                        // dalpha = std::fabs(alam) * std::sqrt((7 + 4*anpsi + 7*anpsi*anpsi) / 18);
                      }
                      
                   }
@@ -249,17 +249,17 @@ namespace mfem
                      // reduced form of 2nd invariant
                      if(dim ==2)
                      {
-                        depls = std::fabs(beta) * std::sqrt(3. / 8);
-                        // depls = std::fabs(alam) * std::sqrt(3. / 8);
+                        dalpha = std::fabs(beta) * std::sqrt(3. / 8);
+                        // dalpha = std::fabs(alam) * std::sqrt(3. / 8);
                      }
                      else
                      {
-                        depls = std::fabs(beta) * std::sqrt(7. / 18);
-                        // depls = std::fabs(alam) * std::sqrt(7. / 18);
+                        dalpha = std::fabs(beta) * std::sqrt(7. / 18);
+                        // dalpha = std::fabs(alam) * std::sqrt(7. / 18);
                      }
 
                      // std::cout << i << ", tensile failure occures,  ft = " << ft << ", plastic_str(0,0) = " << plastic_str(0,0) << ", plastic_str(1,1) = " << \
-                     // plastic_str(1,1) << "plastic_str(2,2) = " << plastic_str(2,2) << ", depls = " << depls << std::endl;
+                     // plastic_str(1,1) << "plastic_str(2,2) = " << plastic_str(2,2) << ", dalpha = " << dalpha << std::endl;
                         
                   }
 
@@ -355,14 +355,14 @@ namespace mfem
 
                   if(viscoplastic)
                   {
-                     // depls = (1 - relax)*depls; 
-                     depls = dt_scaled*depls/(1.0+dt_scaled); 
-                     p_gf[i] += depls;
+                     // dalpha = (1 - relax)*dalpha; 
+                     dalpha = dt_scaled*dalpha/(1.0+dt_scaled); 
+                     p_gf[i] += dalpha;
                   }
                   else
                   {
-                     // p_gf[i] += depls;
-                     p_gf[i] += std::fabs(depls);
+                     // p_gf[i] += dalpha;
+                     p_gf[i] += std::fabs(dalpha);
                   }
                   
             }
@@ -385,7 +385,7 @@ namespace mfem
             double msig{0.0}; // mean stress
             double evol{0.0}; // volumetric strain
             double DEG2RAD{M_PI/180.0};
-            double depls{0.0}; // 2nd invariant of plastic strain
+            double dalpha{0.0}; // 2nd invariant of plastic strain
 
             double fs{0.0};
             double ft{0.0};
@@ -400,7 +400,7 @@ namespace mfem
             double dt_scaled{0.0};
             double numerator   = {0.0};
             double denominator = {0.0};
-            double pls_old = {0.0}; // cumulative 2nd invariant of plastic strain
+            double alpha = {0.0}; // accumulated plastic strain (internal variable)
             double p_slope = {0.0}; 
             double fri_str = {0.0}; // strain_dependent friction angle
             double dil_str = {0.0}; // strain_dependent dilation angle
@@ -412,8 +412,8 @@ namespace mfem
             // bool viscoplastic = true;
             // bool viscoplastic = false;
 
-            double pls0_c = {0.0}; 
-            double pls1_c = {0.0}; 
+            double alpha0_c = {0.0}; 
+            double alpha1_c = {0.0}; 
             double rho_c = {0.0}; 
             double lambda_c = {0.0}; 
             double mu_c = {0.0}; 
@@ -436,16 +436,16 @@ namespace mfem
                   Vector eig_sig_var(2), eig_sig_vec(4);
 
                   // mat = mat_gf[i];
-                  pls_old = p_gf[i];
-                  if(pls_old < 0.0){pls_old =0.0; p_gf[i] = 0.0;}
+                  alpha = p_gf[i];
+                  if(alpha < 0.0){alpha =0.0; p_gf[i] = 0.0;}
 
-                  pls0_c =0.0; pls1_c =0.0; rho_c = 0.0; lambda_c = 0.0; mu_c = 0.0; time_scale = 1.0;
+                  alpha0_c =0.0; alpha1_c =0.0; rho_c = 0.0; lambda_c = 0.0; mu_c = 0.0; time_scale = 1.0;
                   tension_cutoff_c = 0.0; cohesion0_c = 0.0; cohesion1_c = 0.0; friction_angle0_c = 0.0; friction_angle1_c = 0.0;
                   dilation_angle0_c = 0.0; dilation_angle1_c = 0.0; plastic_viscosity_c = 0.0;
                   for( int ii = 0; ii < mat_num; ii++ )
                   {
-                     pls0_c = pls0_c + comp_gf[i+nsize*ii]*pls0[ii];
-                     pls1_c = pls1_c + comp_gf[i+nsize*ii]*pls1[ii];
+                     alpha0_c = alpha0_c + comp_gf[i+nsize*ii]*alpha0[ii];
+                     alpha1_c = alpha1_c + comp_gf[i+nsize*ii]*alpha1[ii];
                      rho_c = rho_c + comp_gf[i+nsize*ii]*rho[ii];
                      lambda_c = lambda_c + comp_gf[i+nsize*ii]*lambda[ii];
                      mu_c = mu_c + comp_gf[i+nsize*ii]*mu[ii];
@@ -459,7 +459,7 @@ namespace mfem
                      // plastic_viscosity_c = plastic_viscosity_c + comp_gf[i+nsize*ii]*plastic_viscosity[ii];
                   }
                   // linear weakening
-                  p_slope = (pls_old - pls0_c)/(pls1_c - pls0_c);
+                  p_slope = (alpha - alpha0_c)/(alpha1_c - alpha0_c);
                   pwave_speed = sqrt((lambda_c + 2*mu_c)/rho_c);
                   if(h_min  > 0){time_scale = h_min / pwave_speed;}
                   plastic_viscosity_c = time_scale * mu_c;
@@ -507,13 +507,13 @@ namespace mfem
                   // linear strain weaking on cohesion, friction and dilation angles.
                   coh_str = cohesion0_c; fri_str = friction_angle0_c; dil_str = dilation_angle0_c;
 
-                  if (pls_old < pls0_c) {
+                  if (alpha < alpha0_c) {
                      // no weakening yet
                      coh_str = cohesion0_c;
                      fri_str = friction_angle0_c;
                      dil_str = dilation_angle0_c;
                   }
-                  else if (pls_old < pls1_c) {
+                  else if (alpha < alpha1_c) {
                      // linear weakening
                      coh_str = cohesion0_c + p_slope * (cohesion1_c - cohesion0_c);
                      fri_str = friction_angle0_c + p_slope * (friction_angle1_c - friction_angle0_c);
@@ -541,7 +541,7 @@ namespace mfem
                   // bisects the obtuse angle made by two yield function
                   fh = sig3 - ten_cut + (sqrt(N_phi*N_phi + 1.0)+ N_phi)*(sig1 - N_phi*ten_cut + 2*coh_str*st_N_phi);
 
-                  depls = 0.0;
+                  dalpha = 0.0;
                         
                   if(fs < 0 & fh < 0) // stress correction at shear failure
                   {
@@ -553,7 +553,7 @@ namespace mfem
                      syy -= (lambda_c + lambda_c*N_psi) * beta;
                      plastic_str(1,1) = (lambda_c + (lambda_c+2*mu_c)*N_psi) * beta;
                      // reduced form of 2nd invariant
-                     depls = std::fabs(beta) * std::sqrt((3 - 2*N_psi + 3*N_psi*N_psi) / 8); 
+                     dalpha = std::fabs(beta) * std::sqrt((3 - 2*N_psi + 3*N_psi*N_psi) / 8); 
                      
                   }
                   else if (ft > 0 & fh > 0) // stress correction at tension failure
@@ -566,7 +566,7 @@ namespace mfem
                      plastic_str(1,1) = (lambda_c+2*mu_c) * beta * 1;
 
                      // reduced form of 2nd invariant
-                     depls = std::fabs(beta) * std::sqrt(7. / 18);
+                     dalpha = std::fabs(beta) * std::sqrt(7. / 18);
                   }
 
                   // Rotating Principal axis to XYZ axis
@@ -608,13 +608,13 @@ namespace mfem
 
                   if(viscoplastic)
                   {
-                     // depls = (1 - relax)*depls; 
-                     depls = dt_scaled*depls/(1.0+dt_scaled); 
-                     p_gf[i] += depls;
+                     // dalpha = (1 - relax)*dalpha; 
+                     dalpha = dt_scaled*dalpha/(1.0+dt_scaled); 
+                     p_gf[i] += dalpha;
                   }
                   else
                   {
-                     p_gf[i] += std::fabs(depls);
+                     p_gf[i] += std::fabs(dalpha);
                   }            
             }
             break;
