@@ -10,7 +10,7 @@ CONFIG_MK = $(MFEM_DIR)/config/config.mk
 # Google Test configuration
 GTEST_DIR ?= /usr/src/googletest
 GTEST_INCLUDE = -I$(GTEST_DIR)/googletest/include
-GTEST_LIB = -lgtest -lgtest_main -lpthread
+GTEST_LIB = -L/usr/local/lib -lgtest -lgtest_main -lpthread
 
 # CLI11 is header-only, no additional link libraries needed for config parsing
 
