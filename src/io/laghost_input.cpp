@@ -26,7 +26,7 @@ std::map<std::string, int> bc_unit_map = {
 
 // Forward declarations
 static void validate_parameters(Param &p);
-static void parse_material_arrays(Param &p);
+static void parse_material_arrays_from_file(const char* filename, Param &p);
 
 // Helper to parse "[v1, v2, v3]" string format into mfem::Vector
 template<class T>
@@ -73,6 +73,99 @@ static void parse_array_string(const std::string &str, const char* name,
         values[i] = temp_values[i];
     }
 }
+
+// Helper to extract the value string from a line like "key = value  # comment"
+static std::string extract_value(const std::string &line) {
+    auto eq_pos = line.find('=');
+    if (eq_pos == std::string::npos) return "";
+    std::string val = line.substr(eq_pos + 1);
+    // Strip inline comment (but not inside brackets)
+    auto hash_pos = val.find('#');
+    if (hash_pos != std::string::npos) {
+        val = val.substr(0, hash_pos);
+    }
+    // Trim whitespace
+    auto start = val.find_first_not_of(" \t");
+    auto end = val.find_last_not_of(" \t\r\n");
+    if (start == std::string::npos) return "";
+    return val.substr(start, end - start + 1);
+}
+
+// Parse material arrays directly from config file, bypassing CLI11's comma-splitting
+static void parse_material_arrays_from_file(const char* filename, Param &p)
+{
+    std::ifstream f(filename);
+    if (!f.good()) {
+        std::cerr << "Error: Cannot re-open config file '" << filename << "' for array parsing\n";
+        std::exit(1);
+    }
+    
+    // Map of property name -> pointer to the mfem::Vector in Param
+    struct ArrayProp { const char* name; Vector* vec; std::string default_val; };
+    std::vector<ArrayProp> props = {
+        {"rho",               &p.mat.rho,               "[2700.0]"},
+        {"lambda",            &p.mat.lambda,             "[3.0e10]"},
+        {"mu",                &p.mat.mu,                 "[3.0e10]"},
+        {"tension_cutoff",    &p.mat.tension_cutoff,     "[0.0]"},
+        {"cohesion0",         &p.mat.cohesion0,          "[4.0e7]"},
+        {"cohesion1",         &p.mat.cohesion1,          "[4.0e6]"},
+        {"friction_angle0",   &p.mat.friction_angle0,    "[30.0]"},
+        {"friction_angle1",   &p.mat.friction_angle1,    "[15.0]"},
+        {"dilation_angle0",   &p.mat.dilation_angle0,    "[0.0]"},
+        {"dilation_angle1",   &p.mat.dilation_angle1,    "[0.0]"},
+        {"alpha0",            &p.mat.alpha0,             "[0.0]"},
+        {"alpha1",            &p.mat.alpha1,             "[0.5]"},
+        {"plastic_viscosity", &p.mat.plastic_viscosity,  "[1.0]"},
+    };
+    
+    // Track which properties we found
+    std::map<std::string, std::string> found_values;
+    
+    std::string line;
+    bool in_mat_section = false;
+    while (std::getline(f, line)) {
+        // Trim leading whitespace
+        auto first_char = line.find_first_not_of(" \t");
+        if (first_char == std::string::npos) continue;
+        
+        // Check for section headers
+        if (line[first_char] == '[') {
+            auto end_bracket = line.find(']', first_char);
+            if (end_bracket != std::string::npos) {
+                std::string section = line.substr(first_char + 1, end_bracket - first_char - 1);
+                in_mat_section = (section == "mat");
+            }
+            continue;
+        }
+        
+        if (!in_mat_section) continue;
+        if (line[first_char] == '#' || line[first_char] == ';') continue;
+        
+        // Extract key
+        auto eq_pos = line.find('=');
+        if (eq_pos == std::string::npos) continue;
+        std::string key = line.substr(first_char, eq_pos - first_char);
+        // Trim trailing whitespace from key
+        auto key_end = key.find_last_not_of(" \t");
+        if (key_end != std::string::npos) key = key.substr(0, key_end + 1);
+        
+        // Check if this is one of our array properties
+        for (auto& prop : props) {
+            if (key == prop.name) {
+                found_values[prop.name] = extract_value(line);
+                break;
+            }
+        }
+    }
+    
+    // Parse each property (use default if not found in file)
+    for (auto& prop : props) {
+        auto it = found_values.find(prop.name);
+        std::string val_str = (it != found_values.end()) ? it->second : prop.default_val;
+        parse_array_string<double>(val_str, prop.name, *prop.vec, p.mat.nmat);
+    }
+}
+
 
 // ============================================================================
 // Main entry point for reading input parameters
@@ -143,6 +236,7 @@ void read_and_assign_input_parameters(OptionsParser& args, Param& param, const i
     args.AddOption(&param.tmop.barrier_type, "-btype", "--barrier-type", "Barrier type.");
     args.AddOption(&param.tmop.worst_case_type, "-wctype", "--worst-case-type", "Worst case type.");
 
+    // Parse command-line first to handle -h/--help and validate args
     args.Parse();
     
     if (!args.Good())
@@ -152,9 +246,10 @@ void read_and_assign_input_parameters(OptionsParser& args, Param& param, const i
         exit(0);
     }
     
-    // Read configuration file using CLI11
+    // Now load configuration file - this OVERWRITES the MFEM defaults
     get_input_parameters(input_parameter_file, param);
     
+    // Print MFEM options (these show command-line args, not config values)
     if (myid == 0) args.PrintOptions(std::cout);
 
     param.tmop.mesh_poly_deg = param.mesh.order_v;
@@ -192,160 +287,155 @@ static void get_input_parameters(const char* filename, Param& p)
 
     CLI::App app{"Laghost configuration parser"};
     
-    // Temporary string holders for material arrays
-    std::string rho_str, lambda_str, mu_str, tension_cutoff_str;
-    std::string cohesion0_str, cohesion1_str;
-    std::string friction_angle0_str, friction_angle1_str;
-    std::string dilation_angle0_str, dilation_angle1_str;
-    std::string alpha0_str, alpha1_str, plastic_viscosity_str;
-    
     // ========== [sim] section ==========
-    app.add_option("sim.problem", p.sim.problem)->default_val(1);
-    app.add_option("sim.dim", p.sim.dim)->default_val(3);
-    app.add_option("sim.t_final", p.sim.t_final)->default_val(1.0);
-    app.add_option("sim.max_tsteps", p.sim.max_tsteps)->default_val(-1);
-    app.add_option("sim.year", p.sim.year)->default_val(false);
-    app.add_option("sim.visualization", p.sim.visualization)->default_val(false);
-    app.add_option("sim.vis_steps", p.sim.vis_steps)->default_val(1000);
-    app.add_option("sim.visit", p.sim.visit)->default_val(false);
-    app.add_option("sim.paraview", p.sim.paraview)->default_val(true);
-    app.add_option("sim.gfprint", p.sim.gfprint)->default_val(false);
-    app.add_option("sim.basename", p.sim.basename)->default_val("results/Laghost");
-    app.add_option("sim.device", p.sim.device)->default_val("cpu");
-    app.add_option("sim.dev", p.sim.dev)->default_val(0);
-    app.add_option("sim.check", p.sim.check)->default_val(false);
-    app.add_option("sim.mem_usage", p.sim.mem_usage)->default_val(false);
-    app.add_option("sim.fom", p.sim.fom)->default_val(false);
-    app.add_option("sim.gpu_aware_mpi", p.sim.gpu_aware_mpi)->default_val(false);
+    auto sim = app.add_subcommand("sim");
+    sim->allow_config_extras(CLI::config_extras_mode::ignore);
+    sim->add_option("problem", p.sim.problem)->default_val(1);
+    sim->add_option("dim", p.sim.dim)->default_val(3);
+    sim->add_option("t_final", p.sim.t_final)->default_val(1.0);
+    sim->add_option("max_tsteps", p.sim.max_tsteps)->default_val(-1);
+    sim->add_option("year", p.sim.year)->default_val(false);
+    sim->add_option("visualization", p.sim.visualization)->default_val(false);
+    sim->add_option("vis_steps", p.sim.vis_steps)->default_val(1000);
+    sim->add_option("visit", p.sim.visit)->default_val(false);
+    sim->add_option("paraview", p.sim.paraview)->default_val(true);
+    sim->add_option("gfprint", p.sim.gfprint)->default_val(false);
+    sim->add_option("basename", p.sim.basename)->default_val("results/Laghost");
+    sim->add_option("device", p.sim.device)->default_val("cpu");
+    sim->add_option("dev", p.sim.dev)->default_val(0);
+    sim->add_option("check", p.sim.check)->default_val(false);
+    sim->add_option("mem_usage", p.sim.mem_usage)->default_val(false);
+    sim->add_option("fom", p.sim.fom)->default_val(false);
+    sim->add_option("gpu_aware_mpi", p.sim.gpu_aware_mpi)->default_val(false);
     
     // ========== [solver] section ==========
-    app.add_option("solver.ode_solver_type", p.solver.ode_solver_type)->default_val(7);
-    app.add_option("solver.cfl", p.solver.cfl)->default_val(0.5);
-    app.add_option("solver.cg_tol", p.solver.cg_tol)->default_val(1.0e-10);
-    app.add_option("solver.ftz_tol", p.solver.ftz_tol)->default_val(0.0);
-    app.add_option("solver.cg_max_iter", p.solver.cg_max_iter)->default_val(300);
-    app.add_option("solver.p_assembly", p.solver.p_assembly)->default_val(false);
-    app.add_option("solver.impose_visc", p.solver.impose_visc)->default_val(true);
+    auto solver = app.add_subcommand("solver");
+    solver->allow_config_extras(CLI::config_extras_mode::ignore);
+    solver->add_option("ode_solver_type", p.solver.ode_solver_type)->default_val(7);
+    solver->add_option("cfl", p.solver.cfl)->default_val(0.5);
+    solver->add_option("cg_tol", p.solver.cg_tol)->default_val(1.0e-10);
+    solver->add_option("ftz_tol", p.solver.ftz_tol)->default_val(0.0);
+    solver->add_option("cg_max_iter", p.solver.cg_max_iter)->default_val(300);
+    solver->add_option("p_assembly", p.solver.p_assembly)->default_val(false);
+    solver->add_option("impose_visc", p.solver.impose_visc)->default_val(true);
     
     // ========== [control] section ==========
-    app.add_option("control.lithostatic", p.control.lithostatic)->default_val(true);
-    app.add_option("control.atmospheric", p.control.atmospheric)->default_val(false);
-    app.add_option("control.init_dt", p.control.init_dt)->default_val(1.0);
-    app.add_option("control.mscale", p.control.mscale)->default_val(5.0e5);
-    app.add_option("control.gravity", p.control.gravity)->default_val(10.0);
-    app.add_option("control.thickness", p.control.thickness)->default_val(10.0e3);
-    app.add_option("control.mass_bal", p.control.mass_bal)->default_val(false);
-    app.add_option("control.dyn_damping", p.control.dyn_damping)->default_val(true);
-    app.add_option("control.dyn_factor", p.control.dyn_factor)->default_val(0.8);
-    app.add_option("control.max_vbc_val", p.control.max_vbc_val)->default_val(3.1709791983764588e-12);
+    auto control = app.add_subcommand("control");
+    control->allow_config_extras(CLI::config_extras_mode::ignore);
+    control->add_option("lithostatic", p.control.lithostatic)->default_val(true);
+    control->add_option("atmospheric", p.control.atmospheric)->default_val(false);
+    control->add_option("init_dt", p.control.init_dt)->default_val(1.0);
+    control->add_option("mscale", p.control.mscale)->default_val(5.0e5);
+    control->add_option("gravity", p.control.gravity)->default_val(10.0);
+    control->add_option("thickness", p.control.thickness)->default_val(10.0e3);
+    control->add_option("mass_bal", p.control.mass_bal)->default_val(false);
+    control->add_option("dyn_damping", p.control.dyn_damping)->default_val(true);
+    control->add_option("dyn_factor", p.control.dyn_factor)->default_val(0.8);
+    control->add_option("max_vbc_val", p.control.max_vbc_val)->default_val(3.1709791983764588e-12);
     
     // ========== [mesh] section ==========
-    app.add_option("mesh.mesh_file", p.mesh.mesh_file)->default_val("default");
-    app.add_option("mesh.rs_levels", p.mesh.rs_levels)->default_val(2);
-    app.add_option("mesh.rp_levels", p.mesh.rp_levels)->default_val(0);
-    app.add_option("mesh.partition_type", p.mesh.partition_type)->default_val(0);
-    app.add_option("mesh.order_v", p.mesh.order_v)->default_val(2);
-    app.add_option("mesh.order_e", p.mesh.order_e)->default_val(1);
-    app.add_option("mesh.order_q", p.mesh.order_q)->default_val(-1);
-    app.add_option("mesh.local_refinement", p.mesh.local_refinement)->default_val(false);
-    app.add_option("mesh.l2_basis", p.mesh.l2_basis)->default_val(1);
+    auto mesh = app.add_subcommand("mesh");
+    mesh->allow_config_extras(CLI::config_extras_mode::ignore);
+    mesh->add_option("mesh_file", p.mesh.mesh_file)->default_val("default");
+    mesh->add_option("rs_levels", p.mesh.rs_levels)->default_val(2);
+    mesh->add_option("rp_levels", p.mesh.rp_levels)->default_val(0);
+    mesh->add_option("partition_type", p.mesh.partition_type)->default_val(0);
+    mesh->add_option("order_v", p.mesh.order_v)->default_val(2);
+    mesh->add_option("order_e", p.mesh.order_e)->default_val(1);
+    mesh->add_option("order_q", p.mesh.order_q)->default_val(-1);
+    mesh->add_option("local_refinement", p.mesh.local_refinement)->default_val(false);
+    mesh->add_option("l2_basis", p.mesh.l2_basis)->default_val(1);
     
     // ========== [bc] section ==========
-    app.add_option("bc.vbc_unit", p.bc.vbc_unit)->default_val("m/s");
-    app.add_option("bc.vbc_factor", p.bc.vbc_factor)->default_val(1.0);
-    app.add_option("bc.vbc_x0", p.bc.vbc_x0)->default_val(1);
-    app.add_option("bc.vbc_x0_val0", p.bc.vbc_x0_val0)->default_val(0.0);
-    app.add_option("bc.vbc_x0_val1", p.bc.vbc_x0_val1)->default_val(0.0);
-    app.add_option("bc.vbc_x0_val2", p.bc.vbc_x0_val2)->default_val(0.0);
-    app.add_option("bc.vbc_x1", p.bc.vbc_x1)->default_val(1);
-    app.add_option("bc.vbc_x1_val0", p.bc.vbc_x1_val0)->default_val(0.0);
-    app.add_option("bc.vbc_x1_val1", p.bc.vbc_x1_val1)->default_val(0.0);
-    app.add_option("bc.vbc_x1_val2", p.bc.vbc_x1_val2)->default_val(0.0);
-    app.add_option("bc.vbc_z0", p.bc.vbc_z0)->default_val(1);
-    app.add_option("bc.vbc_z0_val0", p.bc.vbc_z0_val0)->default_val(0.0);
-    app.add_option("bc.vbc_z0_val1", p.bc.vbc_z0_val1)->default_val(0.0);
-    app.add_option("bc.vbc_z0_val2", p.bc.vbc_z0_val2)->default_val(0.0);
-    app.add_option("bc.vbc_z1", p.bc.vbc_z1)->default_val(1);
-    app.add_option("bc.vbc_z1_val0", p.bc.vbc_z1_val0)->default_val(0.0);
-    app.add_option("bc.vbc_z1_val1", p.bc.vbc_z1_val1)->default_val(0.0);
-    app.add_option("bc.vbc_z1_val2", p.bc.vbc_z1_val2)->default_val(0.0);
-    app.add_option("bc.vbc_y0", p.bc.vbc_y0)->default_val(1);
-    app.add_option("bc.vbc_y0_val0", p.bc.vbc_y0_val0)->default_val(0.0);
-    app.add_option("bc.vbc_y0_val1", p.bc.vbc_y0_val1)->default_val(0.0);
-    app.add_option("bc.vbc_y0_val2", p.bc.vbc_y0_val2)->default_val(0.0);
-    app.add_option("bc.vbc_y1", p.bc.vbc_y1)->default_val(1);
-    app.add_option("bc.vbc_y1_val0", p.bc.vbc_y1_val0)->default_val(0.0);
-    app.add_option("bc.vbc_y1_val1", p.bc.vbc_y1_val1)->default_val(0.0);
-    app.add_option("bc.vbc_y1_val2", p.bc.vbc_y1_val2)->default_val(0.0);
-    app.add_option("bc.winkler_foundation", p.bc.winkler_foundation)->default_val(true);
-    app.add_option("bc.winkler_flat", p.bc.winkler_flat)->default_val(false);
-    app.add_option("bc.winkler_rho", p.bc.winkler_rho)->default_val(3200.0);
-    app.add_option("bc.surf_proc", p.bc.surf_proc)->default_val(false);
-    app.add_option("bc.surf_diff", p.bc.surf_diff)->default_val(1.0e-6);
-    app.add_option("bc.surf_alpha", p.bc.surf_alpha)->default_val(0.0);
-    app.add_option("bc.base_proc", p.bc.base_proc)->default_val(false);
-    app.add_option("bc.base_diff", p.bc.base_diff)->default_val(1.0e-6);
-    app.add_option("bc.base_alpha", p.bc.base_alpha)->default_val(0.0);
+    auto bc = app.add_subcommand("bc");
+    bc->allow_config_extras(CLI::config_extras_mode::ignore);
+    bc->add_option("vbc_unit", p.bc.vbc_unit)->default_val("m/s");
+    bc->add_option("vbc_factor", p.bc.vbc_factor)->default_val(1.0);
+    bc->add_option("vbc_x0", p.bc.vbc_x0)->default_val(1);
+    bc->add_option("vbc_x0_val0", p.bc.vbc_x0_val0)->default_val(0.0);
+    bc->add_option("vbc_x0_val1", p.bc.vbc_x0_val1)->default_val(0.0);
+    bc->add_option("vbc_x0_val2", p.bc.vbc_x0_val2)->default_val(0.0);
+    bc->add_option("vbc_x1", p.bc.vbc_x1)->default_val(1);
+    bc->add_option("vbc_x1_val0", p.bc.vbc_x1_val0)->default_val(0.0);
+    bc->add_option("vbc_x1_val1", p.bc.vbc_x1_val1)->default_val(0.0);
+    bc->add_option("vbc_x1_val2", p.bc.vbc_x1_val2)->default_val(0.0);
+    bc->add_option("vbc_z0", p.bc.vbc_z0)->default_val(1);
+    bc->add_option("vbc_z0_val0", p.bc.vbc_z0_val0)->default_val(0.0);
+    bc->add_option("vbc_z0_val1", p.bc.vbc_z0_val1)->default_val(0.0);
+    bc->add_option("vbc_z0_val2", p.bc.vbc_z0_val2)->default_val(0.0);
+    bc->add_option("vbc_z1", p.bc.vbc_z1)->default_val(1);
+    bc->add_option("vbc_z1_val0", p.bc.vbc_z1_val0)->default_val(0.0);
+    bc->add_option("vbc_z1_val1", p.bc.vbc_z1_val1)->default_val(0.0);
+    bc->add_option("vbc_z1_val2", p.bc.vbc_z1_val2)->default_val(0.0);
+    bc->add_option("vbc_y0", p.bc.vbc_y0)->default_val(1);
+    bc->add_option("vbc_y0_val0", p.bc.vbc_y0_val0)->default_val(0.0);
+    bc->add_option("vbc_y0_val1", p.bc.vbc_y0_val1)->default_val(0.0);
+    bc->add_option("vbc_y0_val2", p.bc.vbc_y0_val2)->default_val(0.0);
+    bc->add_option("vbc_y1", p.bc.vbc_y1)->default_val(1);
+    bc->add_option("vbc_y1_val0", p.bc.vbc_y1_val0)->default_val(0.0);
+    bc->add_option("vbc_y1_val1", p.bc.vbc_y1_val1)->default_val(0.0);
+    bc->add_option("vbc_y1_val2", p.bc.vbc_y1_val2)->default_val(0.0);
+    bc->add_option("winkler_foundation", p.bc.winkler_foundation)->default_val(true);
+    bc->add_option("winkler_flat", p.bc.winkler_flat)->default_val(false);
+    bc->add_option("winkler_rho", p.bc.winkler_rho)->default_val(3200.0);
+    bc->add_option("surf_proc", p.bc.surf_proc)->default_val(false);
+    bc->add_option("surf_diff", p.bc.surf_diff)->default_val(1.0e-6);
+    bc->add_option("surf_alpha", p.bc.surf_alpha)->default_val(0.0);
+    bc->add_option("base_proc", p.bc.base_proc)->default_val(false);
+    bc->add_option("base_diff", p.bc.base_diff)->default_val(1.0e-6);
+    bc->add_option("base_alpha", p.bc.base_alpha)->default_val(0.0);
     
     // ========== [mat] section ==========
-    app.add_option("mat.plastic", p.mat.plastic)->default_val(true);
-    app.add_option("mat.viscoplastic", p.mat.viscoplastic)->default_val(true);
-    app.add_option("mat.nmat", p.mat.nmat)->default_val(1);
-    // Material arrays read as strings and parsed later
-    app.add_option("mat.rho", rho_str)->default_val("[2700.0]");
-    app.add_option("mat.lambda", lambda_str)->default_val("[3.0e10]");
-    app.add_option("mat.mu", mu_str)->default_val("[3.0e10]");
-    app.add_option("mat.tension_cutoff", tension_cutoff_str)->default_val("[0.0]");
-    app.add_option("mat.cohesion0", cohesion0_str)->default_val("[4.0e7]");
-    app.add_option("mat.cohesion1", cohesion1_str)->default_val("[4.0e6]");
-    app.add_option("mat.friction_angle0", friction_angle0_str)->default_val("[30.0]");
-    app.add_option("mat.friction_angle1", friction_angle1_str)->default_val("[15.0]");
-    app.add_option("mat.dilation_angle0", dilation_angle0_str)->default_val("[0.0]");
-    app.add_option("mat.dilation_angle1", dilation_angle1_str)->default_val("[0.0]");
-    app.add_option("mat.alpha0", alpha0_str)->default_val("[0.0]");
-    app.add_option("mat.alpha1", alpha1_str)->default_val("[0.5]");
-    app.add_option("mat.plastic_viscosity", plastic_viscosity_str)->default_val("[1.0]");
-    app.add_option("mat.weak_rad", p.mat.weak_rad)->default_val(1.0e3);
-    app.add_option("mat.weak_x", p.mat.weak_x)->default_val(50.0e3);
-    app.add_option("mat.weak_y", p.mat.weak_y)->default_val(2.00e3);
-    app.add_option("mat.weak_z", p.mat.weak_z)->default_val(0.00e3);
-    app.add_option("mat.ini_alpha", p.mat.ini_alpha)->default_val(0.5);
+    auto mat = app.add_subcommand("mat");
+    mat->allow_config_extras(CLI::config_extras_mode::ignore);
+    mat->add_option("plastic", p.mat.plastic)->default_val(true);
+    mat->add_option("viscoplastic", p.mat.viscoplastic)->default_val(true);
+    mat->add_option("nmat", p.mat.nmat)->default_val(1);
+    // Material arrays are NOT registered with CLI11 (comma-splitting breaks them).
+    // They are parsed manually from the config file after CLI11 processes scalars.
+    mat->add_option("weak_rad", p.mat.weak_rad)->default_val(1.0e3);
+    mat->add_option("weak_x", p.mat.weak_x)->default_val(50.0e3);
+    mat->add_option("weak_y", p.mat.weak_y)->default_val(2.00e3);
+    mat->add_option("weak_z", p.mat.weak_z)->default_val(0.00e3);
+    mat->add_option("ini_alpha", p.mat.ini_alpha)->default_val(0.5);
     
     // ========== [tmop] section ==========
-    app.add_option("tmop.tmop", p.tmop.tmop)->default_val(false);
-    app.add_option("tmop.amr", p.tmop.amr)->default_val(false);
-    app.add_option("tmop.ale", p.tmop.ale)->default_val(1.0);
-    app.add_option("tmop.remesh_steps", p.tmop.remesh_steps)->default_val(50000);
-    app.add_option("tmop.mesh_poly_deg", p.tmop.mesh_poly_deg)->default_val(2);
-    app.add_option("tmop.jitter", p.tmop.jitter)->default_val(0.0);
-    app.add_option("tmop.metric_id", p.tmop.metric_id)->default_val(2);
-    app.add_option("tmop.target_id", p.tmop.target_id)->default_val(1);
-    app.add_option("tmop.lim_const", p.tmop.lim_const)->default_val(0.0);
-    app.add_option("tmop.adapt_lim_const", p.tmop.adapt_lim_const)->default_val(0.0);
-    app.add_option("tmop.quad_type", p.tmop.quad_type)->default_val(1);
-    app.add_option("tmop.quad_order", p.tmop.quad_order)->default_val(8);
-    app.add_option("tmop.solver_type", p.tmop.solver_type)->default_val(0);
-    app.add_option("tmop.solver_iter", p.tmop.solver_iter)->default_val(20);
-    app.add_option("tmop.solver_rtol", p.tmop.solver_rtol)->default_val(1e-10);
-    app.add_option("tmop.solver_art_type", p.tmop.solver_art_type)->default_val(0);
-    app.add_option("tmop.lin_solver", p.tmop.lin_solver)->default_val(2);
-    app.add_option("tmop.max_lin_iter", p.tmop.max_lin_iter)->default_val(100);
-    app.add_option("tmop.move_bnd", p.tmop.move_bnd)->default_val(false);
-    app.add_option("tmop.combomet", p.tmop.combomet)->default_val(0);
-    app.add_option("tmop.bal_expl_combo", p.tmop.bal_expl_combo)->default_val(false);
-    app.add_option("tmop.hradaptivity", p.tmop.hradaptivity)->default_val(false);
-    app.add_option("tmop.h_metric_id", p.tmop.h_metric_id)->default_val(-1);
-    app.add_option("tmop.normalization", p.tmop.normalization)->default_val(false);
-    app.add_option("tmop.verbosity_level", p.tmop.verbosity_level)->default_val(0);
-    app.add_option("tmop.fdscheme", p.tmop.fdscheme)->default_val(false);
-    app.add_option("tmop.adapt_eval", p.tmop.adapt_eval)->default_val(0);
-    app.add_option("tmop.exactaction", p.tmop.exactaction)->default_val(false);
-    app.add_option("tmop.n_hr_iter", p.tmop.n_hr_iter)->default_val(5);
-    app.add_option("tmop.n_h_iter", p.tmop.n_h_iter)->default_val(1);
-    app.add_option("tmop.mesh_node_ordering", p.tmop.mesh_node_ordering)->default_val(0);
-    app.add_option("tmop.barrier_type", p.tmop.barrier_type)->default_val(0);
-    app.add_option("tmop.worst_case_type", p.tmop.worst_case_type)->default_val(0);
-    app.add_option("tmop.tmop_cond_num", p.tmop.tmop_cond_num)->default_val(0.5);
+    auto tmop = app.add_subcommand("tmop");
+    tmop->allow_config_extras(CLI::config_extras_mode::ignore);
+    tmop->add_option("tmop", p.tmop.tmop)->default_val(false);
+    tmop->add_option("amr", p.tmop.amr)->default_val(false);
+    tmop->add_option("ale", p.tmop.ale)->default_val(1.0);
+    tmop->add_option("remesh_steps", p.tmop.remesh_steps)->default_val(50000);
+    tmop->add_option("mesh_poly_deg", p.tmop.mesh_poly_deg)->default_val(2);
+    tmop->add_option("jitter", p.tmop.jitter)->default_val(0.0);
+    tmop->add_option("metric_id", p.tmop.metric_id)->default_val(2);
+    tmop->add_option("target_id", p.tmop.target_id)->default_val(1);
+    tmop->add_option("lim_const", p.tmop.lim_const)->default_val(0.0);
+    tmop->add_option("adapt_lim_const", p.tmop.adapt_lim_const)->default_val(0.0);
+    tmop->add_option("quad_type", p.tmop.quad_type)->default_val(1);
+    tmop->add_option("quad_order", p.tmop.quad_order)->default_val(8);
+    tmop->add_option("solver_type", p.tmop.solver_type)->default_val(0);
+    tmop->add_option("solver_iter", p.tmop.solver_iter)->default_val(20);
+    tmop->add_option("solver_rtol", p.tmop.solver_rtol)->default_val(1e-10);
+    tmop->add_option("solver_art_type", p.tmop.solver_art_type)->default_val(0);
+    tmop->add_option("lin_solver", p.tmop.lin_solver)->default_val(2);
+    tmop->add_option("max_lin_iter", p.tmop.max_lin_iter)->default_val(100);
+    tmop->add_option("move_bnd", p.tmop.move_bnd)->default_val(false);
+    tmop->add_option("combomet", p.tmop.combomet)->default_val(0);
+    tmop->add_option("bal_expl_combo", p.tmop.bal_expl_combo)->default_val(false);
+    tmop->add_option("hradaptivity", p.tmop.hradaptivity)->default_val(false);
+    tmop->add_option("h_metric_id", p.tmop.h_metric_id)->default_val(-1);
+    tmop->add_option("normalization", p.tmop.normalization)->default_val(false);
+    tmop->add_option("verbosity_level", p.tmop.verbosity_level)->default_val(0);
+    tmop->add_option("fdscheme", p.tmop.fdscheme)->default_val(false);
+    tmop->add_option("adapt_eval", p.tmop.adapt_eval)->default_val(0);
+    tmop->add_option("exactaction", p.tmop.exactaction)->default_val(false);
+    tmop->add_option("n_hr_iter", p.tmop.n_hr_iter)->default_val(5);
+    tmop->add_option("n_h_iter", p.tmop.n_h_iter)->default_val(1);
+    tmop->add_option("mesh_node_ordering", p.tmop.mesh_node_ordering)->default_val(0);
+    tmop->add_option("barrier_type", p.tmop.barrier_type)->default_val(0);
+    tmop->add_option("worst_case_type", p.tmop.worst_case_type)->default_val(0);
+    tmop->add_option("tmop_cond_num", p.tmop.tmop_cond_num)->default_val(0.5);
     
     // Allow extra keys in config file (for forward compatibility)
     app.allow_config_extras(CLI::config_extras_mode::ignore);
@@ -359,25 +449,12 @@ static void get_input_parameters(const char* filename, Param& p)
         std::exit(1);
     }
     
-    // Parse material arrays from strings
+    // Parse material arrays directly from config file (CLI11 can't handle bracket arrays)
     if (p.mat.nmat < 1) {
         std::cerr << "Error: mat.nmat must be greater than 0.\n";
         std::exit(1);
     }
-    
-    parse_array_string<double>(rho_str, "mat.rho", p.mat.rho, p.mat.nmat);
-    parse_array_string<double>(lambda_str, "mat.lambda", p.mat.lambda, p.mat.nmat);
-    parse_array_string<double>(mu_str, "mat.mu", p.mat.mu, p.mat.nmat);
-    parse_array_string<double>(tension_cutoff_str, "mat.tension_cutoff", p.mat.tension_cutoff, p.mat.nmat);
-    parse_array_string<double>(cohesion0_str, "mat.cohesion0", p.mat.cohesion0, p.mat.nmat);
-    parse_array_string<double>(cohesion1_str, "mat.cohesion1", p.mat.cohesion1, p.mat.nmat);
-    parse_array_string<double>(friction_angle0_str, "mat.friction_angle0", p.mat.friction_angle0, p.mat.nmat);
-    parse_array_string<double>(friction_angle1_str, "mat.friction_angle1", p.mat.friction_angle1, p.mat.nmat);
-    parse_array_string<double>(dilation_angle0_str, "mat.dilation_angle0", p.mat.dilation_angle0, p.mat.nmat);
-    parse_array_string<double>(dilation_angle1_str, "mat.dilation_angle1", p.mat.dilation_angle1, p.mat.nmat);
-    parse_array_string<double>(alpha0_str, "mat.alpha0", p.mat.alpha0, p.mat.nmat);
-    parse_array_string<double>(alpha1_str, "mat.alpha1", p.mat.alpha1, p.mat.nmat);
-    parse_array_string<double>(plastic_viscosity_str, "mat.plastic_viscosity", p.mat.plastic_viscosity, p.mat.nmat);
+    parse_material_arrays_from_file(filename, p);
     
     validate_parameters(p);
 }
