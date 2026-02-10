@@ -185,7 +185,7 @@ TEST_F(InputTest, InvalidConfigFile) {
     // This test documents the current behavior - when file is missing, program exits
     EXPECT_EXIT({
         read_and_assign_input_parameters(args, param, 0);
-    }, ::testing::ExitedWithCode(1), ".*can not read options configuration file.*");
+    }, ::testing::ExitedWithCode(1), ".*Cannot open configuration file.*");
 }
 
 TEST_F(InputTest, CommandLineOverrides) {
