@@ -117,14 +117,14 @@ TEST_F(ParametersTest, DefaultMatParametersInitialization) {
     EXPECT_EQ(mat.friction_angle1.Size(), 0);
     EXPECT_EQ(mat.dilation_angle0.Size(), 0);
     EXPECT_EQ(mat.dilation_angle1.Size(), 0);
-    EXPECT_EQ(mat.pls0.Size(), 0);
-    EXPECT_EQ(mat.pls1.Size(), 0);
+    EXPECT_EQ(mat.alpha0.Size(), 0);
+    EXPECT_EQ(mat.alpha1.Size(), 0);
     EXPECT_EQ(mat.plastic_viscosity.Size(), 0);
     EXPECT_EQ(mat.weak_rad, 0.0);
     EXPECT_EQ(mat.weak_x, 0.0);
     EXPECT_EQ(mat.weak_y, 0.0);
     EXPECT_EQ(mat.weak_z, 0.0);
-    EXPECT_EQ(mat.ini_pls, 0.0);
+    EXPECT_EQ(mat.ini_alpha, 0.0);
 }
 
 TEST_F(ParametersTest, DefaultTMOPParametersInitialization) {

@@ -119,10 +119,10 @@ TEST_F(FunctionTest, PlasticCoefficientInitialization) {
     location[0] = 0.5;
     location[1] = 0.5;
     double rad = 0.1;
-    double ini_pls = 0.5;
+    double ini_alpha = 0.5;
     
     EXPECT_NO_THROW({
-        PlasticCoefficient plastic_coeff(dim, *xyz_gf, location, rad, ini_pls);
+        PlasticCoefficient plastic_coeff(dim, *xyz_gf, location, rad, ini_alpha);
         
         // Test that coefficient has correct vector dimension
         EXPECT_EQ(plastic_coeff.GetVDim(), 1);
@@ -178,9 +178,9 @@ TEST_F(FunctionTest, CoefficientEvaluation) {
     location[0] = 0.5;
     location[1] = 0.5;
     double rad = 0.1;
-    double ini_pls = 0.5;
+    double ini_alpha = 0.5;
     
-    PlasticCoefficient plastic_coeff(dim, *xyz_gf, location, rad, ini_pls);
+    PlasticCoefficient plastic_coeff(dim, *xyz_gf, location, rad, ini_alpha);
     
     // Note: Full evaluation would require proper element transformation setup
     // This tests the interface without crashing

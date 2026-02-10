@@ -12,8 +12,7 @@ GTEST_DIR ?= /usr/src/googletest
 GTEST_INCLUDE = -I$(GTEST_DIR)/googletest/include
 GTEST_LIB = -lgtest -lgtest_main -lpthread
 
-# Boost configuration (for input parsing tests)
-BOOST_LIBS = -lboost_program_options
+# CLI11 is header-only, no additional link libraries needed for config parsing
 
 # Compiler and flags
 CXX = $(MFEM_CXX)
@@ -27,7 +26,7 @@ CCC = $(strip $(CXX) $(LAGHOST_FLAGS) $(if $(EXTRA_INC_DIR),-I$(EXTRA_INC_DIR)))
 
 # Libraries
 LAGHOST_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
-LIBS = $(strip $(LAGHOST_LIBS) $(LDFLAGS) $(BOOST_LIBS) $(GTEST_LIB))
+LIBS = $(strip $(LAGHOST_LIBS) $(LDFLAGS) $(GTEST_LIB))
 
 # Source files
 TEST_SOURCES = unit_tests.cpp test_parameters.cpp test_input.cpp test_function.cpp \
@@ -88,7 +87,7 @@ help:
 	@echo "Requirements:"
 	@echo "  - Google Test library installed"
 	@echo "  - MFEM library built and configured"
-	@echo "  - Boost program_options library"
+	@echo "  - CLI11 (header-only, included in source tree)"
 	@echo ""
 	@echo "Environment Variables:"
 	@echo "  MFEM_DIR   - Path to MFEM directory (default: ../../mfem)"

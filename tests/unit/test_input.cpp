@@ -88,14 +88,14 @@ friction_angle0 = [30.0]
 friction_angle1 = [30.0]
 dilation_angle0 = [0.0]
 dilation_angle1 = [0.0]
-pls0 = [0.0]
-pls1 = [0.5]
+alpha0 = [0.0]
+alpha1 = [0.5]
 plastic_viscosity = [1.0]
 weak_rad = 1.0e3
 weak_x = 50.0e3
 weak_y = 2.00e3
 weak_z = 0.00e3
-ini_pls = 0.5
+ini_alpha = 0.5
 
 [tmop]
 tmop = false

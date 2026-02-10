@@ -28,7 +28,6 @@ jobs:
           build-essential \
           cmake \
           libgtest-dev \
-          libboost-program-options-dev \
           liblapack-dev \
           libblas-dev \
           libopenmpi-dev \
