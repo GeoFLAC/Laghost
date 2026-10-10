@@ -175,7 +175,7 @@ void read_and_assign_input_parameters(OptionsParser& args, Param& param, const i
     const char* input_parameter_file = "./defaults.cfg";
     args.AddOption(&input_parameter_file, "-i", "--input", "Input parameter file to use.");
 
-    // Command-line options override config file values (handled by MFEM's OptionsParser)
+    // Command-line options override config file values (see the second args.Parse() below)
     args.AddOption(&param.sim.dim, "-dim", "--dimension", "Dimension of the problem.");
     args.AddOption(&param.sim.t_final, "-tf", "--t-final", "Final time; start time is 0.");
     args.AddOption(&param.sim.max_tsteps, "-ms", "--max-steps", "Maximum number of steps.");
@@ -236,20 +236,24 @@ void read_and_assign_input_parameters(OptionsParser& args, Param& param, const i
     args.AddOption(&param.tmop.barrier_type, "-btype", "--barrier-type", "Barrier type.");
     args.AddOption(&param.tmop.worst_case_type, "-wctype", "--worst-case-type", "Worst case type.");
 
-    // Parse command-line first to handle -h/--help and validate args
+    // Parse command-line first to handle -h/--help, validate args, and get the config file name
     args.Parse();
-    
+
     if (!args.Good())
     {
         if (myid == 0) args.PrintUsage(std::cout);
         MPI_Finalize();
         exit(0);
     }
-    
-    // Now load configuration file - this OVERWRITES the MFEM defaults
+
+    // Load configuration file - this assigns every config parameter (file value or default)
     get_input_parameters(input_parameter_file, param);
-    
-    // Print MFEM options (these show command-line args, not config values)
+
+    // Parse command-line again so that flags given explicitly override config file values.
+    // OptionsParser::Parse() only writes options present in argv, so the rest keep config values.
+    args.Parse();
+
+    // Print MFEM options (command-line-bound values after config + overrides)
     if (myid == 0) args.PrintOptions(std::cout);
 
     param.tmop.mesh_poly_deg = param.mesh.order_v;

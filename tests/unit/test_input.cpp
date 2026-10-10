@@ -190,14 +190,21 @@ TEST_F(InputTest, InvalidConfigFile) {
 
 TEST_F(InputTest, CommandLineOverrides) {
     // Test that command line arguments can override config file values
-    const char* argv[] = {"laghost", "-i", test_config_file.c_str(), "-pa", "-dim", "3"};
-    int argc = 6;
-    
+    const char* argv[] = {"laghost", "-i", test_config_file.c_str(), "-pa", "-dim", "3", "-cfl", "0.1"};
+    int argc = 8;
+
     OptionsParser args(argc, const_cast<char**>(argv));
-    
+
     EXPECT_NO_THROW({
         read_and_assign_input_parameters(args, param, 0);
     });
+
+    // Config file has dim = 2, p_assembly = false, cfl = 0.25; CLI flags must win
+    EXPECT_EQ(param.sim.dim, 3);
+    EXPECT_TRUE(param.solver.p_assembly);
+    EXPECT_DOUBLE_EQ(param.solver.cfl, 0.1);
+    // Values not given on the command line keep their config file values
+    EXPECT_EQ(param.sim.vis_steps, 10);
 }
 
 TEST_F(InputTest, DefaultParametersWithoutConfig) {
